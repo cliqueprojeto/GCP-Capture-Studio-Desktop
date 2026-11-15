@@ -1,0 +1,39 @@
+# Maintainer: Bruno Albertini <https://gestaoculturalpro.com.br>
+# Pacote para BigLinux / Manjaro / Arch Linux.
+# Gere com:  cd packaging && makepkg -f      Instale com:  sudo pacman -U gcp-capture-studio-*.pkg.tar.zst
+pkgname=gcp-capture-studio
+pkgver=1.3.0
+pkgrel=1
+pkgdesc="Gravador de tela com anotações em tempo real e editor de vídeo integrado"
+arch=('any')
+url="https://github.com/cliqueprojeto/GCP-Capture-Studio-Desktop"
+license=('GPL-3.0-or-later')
+depends=(
+  'python' 'pyside6' 'python-gobject' 'python-cairo'
+  'gstreamer' 'gst-plugins-base' 'gst-plugins-good' 'gst-plugins-bad' 'gst-plugins-ugly'
+  'gst-plugin-pipewire' 'gst-plugin-va' 'gst-libav'
+  'pipewire' 'pipewire-pulse' 'libpulse' 'xdg-desktop-portal' 'xorg-xwayland'
+  'ffmpeg' 'xdg-user-dirs'
+  'kdenlive'   # editor de vídeo integrado (recebe a gravação já na linha do tempo)
+)
+optdepends=(
+  'xdg-desktop-portal-kde: captura de tela no KDE Plasma (Wayland)'
+  'xdg-desktop-portal-gnome: captura de tela no GNOME (Wayland)'
+  'shotcut: editor de vídeo alternativo'
+)
+source=()
+sha256sums=()
+
+package() {
+  local src="$startdir/.."
+  install -d "$pkgdir/usr/lib/$pkgname"
+  cp -r "$src/gcp_capture_studio" "$pkgdir/usr/lib/$pkgname/"
+  find "$pkgdir/usr/lib/$pkgname" -name '__pycache__' -type d -prune -exec rm -rf {} +
+  python -m compileall -q -d "/usr/lib/$pkgname" "$pkgdir/usr/lib/$pkgname" || true
+
+  install -Dm755 "$startdir/gcp-capture-studio" "$pkgdir/usr/bin/gcp-capture-studio"
+  install -Dm644 "$startdir/br.com.gestaoculturalpro.CaptureStudio.desktop" \
+    "$pkgdir/usr/share/applications/br.com.gestaoculturalpro.CaptureStudio.desktop"
+  install -Dm644 "$src/gcp_capture_studio/assets/logo.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/gcp-capture-studio.svg"
+}

@@ -1,0 +1,4 @@
+#!/bin/sh
+# GCP Capture Studio — desenvolvido por Bruno Albertini (https://gestaoculturalpro.com.br)
+export PYTHONPATH="/usr/lib/gcp-capture-studio${PYTHONPATH:+:$PYTHONPATH}"
+exec /usr/bin/python3 -m gcp_capture_studio "$@"

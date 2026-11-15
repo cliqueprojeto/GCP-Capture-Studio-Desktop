@@ -1,0 +1,23 @@
+# material de referência local (não faz parte do projeto)
+Exemplos_Dev_Nao_Entrar/
+
+# saídas de build
+dist/
+build/
+*.spec
+packaging/pkg/
+packaging/src/
+*.pkg.tar
+*.pkg.tar.zst
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# editores e ferramentas
+.idea/
+.vscode/
+*.swp
+.DS_Store

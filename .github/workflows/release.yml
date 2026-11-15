@@ -1,0 +1,127 @@
+name: Instaladores
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Pacotes Linux (.deb, .rpm, .pkg.tar.zst)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ferramentas de empacotamento
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Gerar .deb e .rpm
+        run: sh packaging/build-linux.sh
+      - name: Gerar .pkg.tar.zst (Arch/Manjaro/BigLinux)
+        run: |
+          docker run --rm -v "$PWD":/src archlinux:base-devel bash -c '
+            set -e
+            pacman -Sy --noconfirm python >/dev/null
+            useradd -m builder
+            cp -r /src /home/builder/src && chown -R builder /home/builder/src
+            su builder -c "cd /home/builder/src && sh packaging/build-pkg.sh"
+            cp /home/builder/src/dist/*.pkg.tar.zst /src/dist/'
+      - name: Conferir o .deb no Ubuntu 24.04
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD/dist":/dist ubuntu:24.04 bash -c '
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update >/dev/null
+            apt-get install -y --no-install-recommends /dist/*.deb >/dev/null
+            gcp-capture-studio --version
+            gcp-capture-studio --selftest'
+      - name: Conferir o .rpm no Fedora
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD/dist":/dist fedora:latest bash -c '
+            set -e
+            dnf install -y /dist/*.rpm >/dev/null
+            gcp-capture-studio --version
+            gcp-capture-studio --selftest'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    name: Instalador Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-gobject
+            mingw-w64-ucrt-x86_64-python-cairo
+            mingw-w64-ucrt-x86_64-pyside6
+            mingw-w64-ucrt-x86_64-gstreamer
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-gst-plugins-ugly
+            mingw-w64-ucrt-x86_64-gst-libav
+            mingw-w64-ucrt-x86_64-ffmpeg
+            mingw-w64-ucrt-x86_64-pyinstaller
+      - name: Conferir a partir do código
+        run: python -m gcp_capture_studio --selftest
+      - name: Gerar a pasta do programa
+        run: sh packaging/windows/build.sh
+      - name: Conferir o programa empacotado
+        run: |
+          "dist/GCP Capture Studio/GCP Capture Studio.exe" --selftest "$PWD/selftest.txt" || true
+          cat selftest.txt
+          grep -q "RESULTADO: OK" selftest.txt
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (!(Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Gerar o instalador
+        run: |
+          ver=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' gcp_capture_studio/__init__.py)
+          MSYS2_ARG_CONV_EXCL='*' "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DAppVersion=$ver" 'packaging\windows\installer.iss'
+          ls -la dist/*.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.exe
+          if-no-files-found: error
+
+  publicar:
+    name: Publicar a versão
+    needs: [linux, windows]
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') && needs.linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: saida
+          merge-multiple: true
+      - name: Hashes e notas
+        run: |
+          cd saida
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v v="## $ver" '$0==v{on=1;next} /^## /{on=0} on' ../HISTORICO.md > ../notas.md
+          cat ../notas.md
+      - name: Criar a versão no GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" saida/* \
+            --title "GCP Capture Studio ${GITHUB_REF_NAME#v}" --notes-file notas.md

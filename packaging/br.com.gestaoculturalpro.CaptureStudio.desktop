@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=GCP Capture Studio
+GenericName=Gravador de tela
+GenericName[en]=Screen recorder
+Comment=Grave a tela com anotações em tempo real e envie direto ao editor de vídeo
+Comment[en]=Record your screen with live annotations and send it straight to the video editor
+Exec=gcp-capture-studio
+Icon=gcp-capture-studio
+Terminal=false
+Categories=AudioVideo;Video;Recorder;Qt;
+Keywords=gravar;tela;screencast;captura;vídeo;tutorial;screen recorder;
+StartupNotify=true
+StartupWMClass=gcp-capture-studio
