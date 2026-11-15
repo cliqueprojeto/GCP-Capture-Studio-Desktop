@@ -22,7 +22,7 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/src archlinux:base-devel bash -c '
             set -e
-            pacman -Sy --noconfirm python >/dev/null
+            pacman -Syu --noconfirm python >/dev/null
             useradd -m builder
             cp -r /src /home/builder/src && chown -R builder /home/builder/src
             su builder -c "cd /home/builder/src && sh packaging/build-pkg.sh"
@@ -68,6 +68,8 @@ jobs:
             mingw-w64-ucrt-x86_64-python-gobject
             mingw-w64-ucrt-x86_64-python-cairo
             mingw-w64-ucrt-x86_64-pyside6
+            mingw-w64-ucrt-x86_64-qt6-svg
+            mingw-w64-ucrt-x86_64-qt6-multimedia
             mingw-w64-ucrt-x86_64-gstreamer
             mingw-w64-ucrt-x86_64-gst-plugins-base
             mingw-w64-ucrt-x86_64-gst-plugins-good
