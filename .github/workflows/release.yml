@@ -95,10 +95,8 @@ jobs:
       - name: Conferir o programa empacotado
         timeout-minutes: 5
         run: |
-          ls "dist/GCP Capture Studio/_internal" | grep -iE "scanner|ffmpeg|ffprobe|ggml|whisper" || true
-          for f in "dist/GCP Capture Studio/_internal"/*.dll "dist/GCP Capture Studio/_internal"/gst_plugins/*.dll; do
-            objdump -p "$f" 2>/dev/null | grep -qiE "DLL Name: .*(ggml|whisper)" && echo "usa ggml/whisper: $f"
-          done || true
+          ls "dist/GCP Capture Studio/_internal/gst_plugins" | wc -l
+          "dist/GCP Capture Studio/_internal/ffmpeg.exe" -hide_banner -version | head -n 1
           timeout 180 "dist/GCP Capture Studio/GCP Capture Studio.exe" --selftest "$PWD/selftest.txt" || true
           cat selftest.txt
           grep -q "RESULTADO: OK" selftest.txt

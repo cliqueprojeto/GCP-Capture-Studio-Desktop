@@ -21,4 +21,11 @@ pyinstaller --noconfirm --clean --windowed \
   --hidden-import gi --hidden-import cairo --hidden-import gi._gi_cairo \
   --exclude-module tkinter \
   packaging/windows/run.py
+# os plugins do GStreamer baseados no FFmpeg não são usados pela gravação e trazem
+# bibliotecas que falham ao serem carregadas dentro do programa; o ffmpeg.exe continua incluído
+for f in "dist/GCP Capture Studio/_internal"/gst_plugins/*.dll; do
+  if objdump -p "$f" 2>/dev/null | grep -qiE "DLL Name: (avfilter|avcodec|avformat)"; then
+    echo "removido: $(basename "$f")"; rm -f "$f"
+  fi
+done
 echo "ok: dist/GCP Capture Studio"
