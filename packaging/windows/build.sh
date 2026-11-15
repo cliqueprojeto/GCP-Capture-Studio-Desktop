@@ -4,6 +4,11 @@
 set -e
 cd "$(dirname "$0")/../.."
 rm -rf build "dist/GCP Capture Studio"
+# o GStreamer examina os plugins num processo auxiliar; sem ele, o exame é feito
+# dentro do programa e alguns plugins não aceitam ser carregados duas vezes
+SCANNER="$MINGW_PREFIX/libexec/gstreamer-1.0/gst-plugin-scanner.exe"
+[ -f "$SCANNER" ] || SCANNER="$(find "$MINGW_PREFIX" -name gst-plugin-scanner.exe | head -n 1)"
+[ -f "$SCANNER" ] || { echo "gst-plugin-scanner.exe não encontrado"; exit 1; }
 pyinstaller --noconfirm --clean --windowed \
   --name "GCP Capture Studio" \
   --paths . \
@@ -11,6 +16,7 @@ pyinstaller --noconfirm --clean --windowed \
   --add-data "gcp_capture_studio/assets;gcp_capture_studio/assets" \
   --add-binary "$(cygpath -m "$(command -v ffmpeg.exe)");." \
   --add-binary "$(cygpath -m "$(command -v ffprobe.exe)");." \
+  --add-binary "$(cygpath -m "$SCANNER");." \
   --collect-submodules gcp_capture_studio \
   --hidden-import gi --hidden-import cairo --hidden-import gi._gi_cairo \
   --exclude-module tkinter \

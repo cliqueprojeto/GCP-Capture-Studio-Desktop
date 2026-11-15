@@ -875,6 +875,11 @@ def main(argv: list[str] | None = None) -> int:
         # instalador do Windows: ffmpeg/ffprobe acompanham o programa
         base = os.path.dirname(sys.executable)
         os.environ["PATH"] = os.pathsep.join([base, os.path.join(base, "_internal"), os.environ.get("PATH", "")])
+        for folder in (os.path.join(base, "_internal"), base):
+            scanner = os.path.join(folder, "gst-plugin-scanner.exe")
+            if os.path.isfile(scanner):
+                os.environ["GST_PLUGIN_SCANNER"] = scanner
+                break
     if "--selftest" in argv:
         return _selftest(argv[argv.index("--selftest") + 1] if len(argv) > argv.index("--selftest") + 1 else "")
     if sys.platform.startswith("linux") and "QT_QPA_PLATFORM" not in os.environ:
