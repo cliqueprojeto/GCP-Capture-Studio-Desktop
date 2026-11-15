@@ -212,8 +212,10 @@ class MicTest(QObject):
             self.pipe = Gst.parse_launch(
                 f"{source_fragment(device)} num-buffers={buffers} blocksize=1920 ! audioconvert ! audioresample ! "
                 f"audio/x-raw,rate=48000,channels=2,format=S16LE ! audioconvert ! volume volume={volume:.3f} ! "
-                f'level interval=60000000 post-messages=true ! wavenc ! filesink location="{self.path}"'
+                "level interval=60000000 post-messages=true ! wavenc ! filesink name=out"
             )
+            # caminho por propriedade: no texto do pipeline a barra invertida do Windows é escape
+            self.pipe.get_by_name("out").set_property("location", self.path)
             self.pipe.set_state(Gst.State.PLAYING)
         except Exception:
             self.pipe = None
@@ -232,9 +234,10 @@ class MicTest(QObject):
             self.pipe.set_state(Gst.State.NULL)
         try:
             self.pipe = Gst.parse_launch(
-                f'filesrc location="{self.path}" ! wavparse ! audioconvert ! audioresample ! '
+                "filesrc name=in ! wavparse ! audioconvert ! audioresample ! "
                 f"level interval=60000000 post-messages=true ! {sink_fragment(self.sink)}"
             )
+            self.pipe.get_by_name("in").set_property("location", self.path)
             self.pipe.set_state(Gst.State.PLAYING)
             self.mode = "playing"
             self.state.emit(self.mode)

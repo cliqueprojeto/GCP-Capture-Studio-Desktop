@@ -1,5 +1,12 @@
 # Histórico de versões
 
+## 1.3.1
+
+- **Windows: as gravações voltaram a ser salvas.** O vídeo era gravado, mas o arquivo ia parar fora da pasta escolhida e o programa avisava "Nada foi gravado". Agora ele é salvo na pasta das gravações, em MP4.
+- **Windows: a gravação é enviada ao editor ao terminar.** Com o Kdenlive instalado, ele abre com o vídeo já na linha do tempo.
+- **Tema escuro nas listas e menus:** em sistemas com tema claro, as listas das caixas de seleção apareciam com fundo branco e texto ilegível. O programa passa a usar as próprias cores em todas as janelas, sem depender do tema do sistema.
+- **Windows testado em uso real** (Windows 11): gravação em tela inteira e por região com microfone e som do sistema, atalhos globais, zoom acompanhando o mouse com moldura e miniatura ao vivo, e envio ao Kdenlive.
+
 ## 1.3.0
 
 - **Atualizações pelo GitHub dentro do programa:** em Configurações › Geral › Atualizações, escolha a frequência da verificação ou clique em "Verificar agora". Havendo versão nova, o programa mostra as novidades, baixa o pacote do sistema, confere o SHA-256 e instala.

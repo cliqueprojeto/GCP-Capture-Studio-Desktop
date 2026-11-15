@@ -20,14 +20,43 @@ _WIN_PATHS = {  # pasta de instalação e executável no Windows
 }
 
 
+_PRIVATE_ENV = ("QT_", "QML", "GST_", "GI_", "GIO_", "GDK_", "GTK_", "PYTHON", "_PYI", "_MEI")
+
+
+def _editor_env() -> dict | None:
+    """Ambiente do editor. No executável empacotado, o gravador aponta o Qt, o GStreamer e o PATH
+    para as próprias bibliotecas; se o editor herdar isso, tenta carregar os plugins Qt do gravador
+    e não abre ("no Qt platform plugin could be initialized")."""
+    if not getattr(sys, "frozen", False):
+        return None
+    base = os.path.normcase(os.path.dirname(sys.executable))
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith(_PRIVATE_ENV)}
+    env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep) if p and not os.path.normcase(p).startswith(base))
+    return env
+
+
 def _spawn(args: list[str]) -> None:
     """Abre o editor desacoplado do gravador (ele continua aberto depois que o gravador fecha)."""
-    kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-    if WINDOWS:
-        kw["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    else:
+    kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "env": _editor_env()}
+    if not WINDOWS:
         kw["start_new_session"] = True
-    subprocess.Popen(args, **kw)
+        subprocess.Popen(args, **kw)
+        return
+    kw["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    kw["cwd"] = os.path.dirname(args[0]) or None
+    frozen = getattr(sys, "frozen", False)
+    kernel32 = None
+    if frozen:
+        # o executável empacotado fixa a própria pasta de DLLs, e os processos filhos a herdam
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetDllDirectoryW(None)
+    try:
+        subprocess.Popen(args, **kw)
+    finally:
+        if kernel32 is not None:
+            kernel32.SetDllDirectoryW(getattr(sys, "_MEIPASS", None))
 
 EDITORS = {
     "kdenlive": ("Kdenlive", ["kdenlive"], "org.kde.kdenlive"),
@@ -71,7 +100,8 @@ def probe(path: str) -> dict:
     try:
         out = subprocess.run(
             ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", "-show_format", path],
-            capture_output=True, text=True, timeout=20,
+            capture_output=True, text=True, timeout=20, encoding="utf-8", errors="replace",
+            creationflags=0x08000000 if WINDOWS else 0,  # CREATE_NO_WINDOW: sem janela de console piscando
         )
         data = json.loads(out.stdout)
         for st in data.get("streams", []):
@@ -182,6 +212,8 @@ _TRACK_PROPS = """  <property name="kdenlive:trackheight">67</property>
 def build_kdenlive_project(video: str, project_path: str, flatpak: bool = False) -> str:
     """Cria o arquivo .kdenlive com o clipe na linha do tempo e devolve o caminho."""
     info = probe(video)
+    if WINDOWS:
+        video = video.replace("\\", "/")  # o MLT/Kdenlive usa barras normais nos caminhos do projeto
     fps = info["fps_num"] / info["fps_den"]
     frames = info["frames"]
     out_tc = _tc(frames - 1, fps)

@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
 ASSETS = Path(__file__).parent / "assets"
@@ -183,7 +183,11 @@ QComboBox:hover {{ border-color: #3a4d6e; }}
 QComboBox:disabled {{ color: #5d6b82; }}
 QComboBox::drop-down {{ border: none; width: 22px; }}
 QComboBox::down-arrow {{ image: none; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid {MUTED}; margin-right: 8px; }}
-QComboBox QAbstractItemView {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 8px; padding: 4px; selection-background-color: {alpha(ACCENT, 0.22)}; selection-color: {TEXT}; outline: none; }}
+QComboBox QAbstractItemView {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; padding: 4px; selection-background-color: {alpha(ACCENT, 0.22)}; selection-color: {TEXT}; outline: none; }}
+QComboBox QAbstractItemView::item {{ min-height: 26px; padding: 2px 8px; border-radius: 6px; color: {TEXT}; }}
+QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {{ background: {alpha(ACCENT, 0.22)}; color: {TEXT}; }}
+QComboBox QAbstractItemView::item:disabled {{ color: #5d6b82; }}
+QComboBoxPrivateContainer {{ background: {SURFACE}; border: 1px solid {BORDER}; }}
 
 QLineEdit, QSpinBox, QDoubleSpinBox, QKeySequenceEdit {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 8px; padding: 6px 10px; selection-background-color: {alpha(ACCENT, 0.4)}; }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{ border-color: {ACCENT}; }}
@@ -219,6 +223,25 @@ QMenu::item {{ padding: 7px 22px 7px 12px; border-radius: 6px; }}
 QMenu::item:selected {{ background: {alpha(ACCENT, 0.2)}; }}
 QMenu::separator {{ height: 1px; background: {BORDER}; margin: 4px 6px; }}
 """
+
+
+def dark_palette() -> QPalette:
+    """Paleta escura do aplicativo. Tudo o que a folha de estilos não alcança (lista flutuante das
+    caixas de seleção, menus, diálogos do Qt) usa a paleta; sem ela, num sistema com tema claro
+    essas partes ficam com fundo branco e o texto claro do tema some."""
+    pal = QPalette()
+    roles = {
+        QPalette.Window: BG, QPalette.WindowText: TEXT, QPalette.Base: SURFACE, QPalette.AlternateBase: CARD,
+        QPalette.Text: TEXT, QPalette.Button: CARD, QPalette.ButtonText: TEXT, QPalette.BrightText: "#ffffff",
+        QPalette.ToolTipBase: "#0a101b", QPalette.ToolTipText: TEXT, QPalette.PlaceholderText: MUTED,
+        QPalette.Highlight: ACCENT, QPalette.HighlightedText: "#08202e", QPalette.Link: ACCENT, QPalette.LinkVisited: VIOLET,
+        QPalette.Light: CARD_HI, QPalette.Midlight: CARD, QPalette.Mid: BORDER, QPalette.Dark: "#0a101b", QPalette.Shadow: "#000000",
+    }
+    for role, color in roles.items():
+        pal.setColor(role, QColor(color))
+    for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText):
+        pal.setColor(QPalette.Disabled, role, QColor("#5d6b82"))
+    return pal
 
 
 def icon_size(n: int) -> QSize:

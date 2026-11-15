@@ -908,6 +908,7 @@ def main(argv: list[str] | None = None) -> int:
     app.setWindowIcon(theme.app_icon())
     app.setQuitOnLastWindowClosed(False)
     app.setStyle("Fusion")
+    app.setPalette(theme.dark_palette())  # o tema não depende do tema claro/escuro do sistema
     app.setStyleSheet(theme.STYLESHEET)
 
     # instância única: uma segunda abertura apenas traz a janela existente para frente

@@ -28,7 +28,7 @@ Baixe a versão mais recente na página de [versões publicadas](https://github.
 
 Os pacotes Linux instalam o gravador e trazem o editor Kdenlive como dependência ou recomendação. Os hashes SHA-256 de todos os arquivos ficam em `SHA256SUMS.txt` na própria versão.
 
-**Situação de cada sistema.** O programa é desenvolvido e testado no BigLinux com KDE Plasma (Wayland). Os pacotes `.deb` e `.rpm` são gerados e têm as dependências conferidas automaticamente a cada versão, mas ainda não foram testados em uso real nessas distribuições. A versão para **Windows é a primeira** e também ainda não foi testada em máquinas reais: captura, atalhos globais, efeitos e áudio foram escritos para o Windows, com as limitações listadas abaixo. Relatos são bem-vindos na aba [Issues](https://github.com/cliqueprojeto/GCP-Capture-Studio-Desktop/issues).
+**Situação de cada sistema.** O programa é desenvolvido e testado no BigLinux com KDE Plasma (Wayland). Os pacotes `.deb` e `.rpm` são gerados e têm as dependências conferidas automaticamente a cada versão, mas ainda não foram testados em uso real nessas distribuições. A versão para **Windows** foi testada em uso real no Windows 11 a partir da 1.3.1: gravação em tela inteira e por região com microfone e som do sistema, atalhos globais, zoom acompanhando o mouse e envio ao Kdenlive funcionam, com as limitações listadas abaixo. Relatos são bem-vindos na aba [Issues](https://github.com/cliqueprojeto/GCP-Capture-Studio-Desktop/issues).
 
 Como o instalador do Windows não tem assinatura digital de código, o sistema pode mostrar "O Windows protegeu o computador". Clique em **Mais informações** e depois em **Executar assim mesmo**. No Windows, instale também o [Kdenlive](https://kdenlive.org/pt-br/download/) para a edição.
 
@@ -96,7 +96,7 @@ Por padrão, o programa verifica se há versão nova no GitHub ao abrir. Em **Co
 - Para os efeitos de clique e de teclas, o usuário precisa pertencer ao grupo `input` (padrão no BigLinux e no Manjaro).
 - Na primeira gravação em cada monitor, o sistema pede autorização para compartilhar a tela; depois disso a escolha é lembrada.
 
-**Windows (primeira versão)**
+**Windows**
 - Tela inteira e região; a gravação por janela usa a seleção por região.
 - Microfone e som do sistema usam os **dispositivos padrão** do Windows.
 - A exclusão da barra e da lupa do vídeo requer Windows 10 versão 2004 ou mais nova.

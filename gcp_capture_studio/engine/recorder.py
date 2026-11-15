@@ -158,8 +158,11 @@ class Recorder(QObject):
             # folga de 200 ms no misturador: sem ela, blocos são descartados quando uma das fontes
             # entrega os dados com atraso e o som sai "picotado"
             audio_part = f"audiomixer name=amix latency=200000000 ignore-inactive-pads=true ! audio/x-raw,rate=48000,channels=2 ! {tail}" + "".join(f"{s_} ! amix. " for s_ in srcs)
-        desc = f'{video} {audio_part} matroskamux name=mux ! filesink location="{path}" sync=false'
+        desc = f"{video} {audio_part} matroskamux name=mux ! filesink name=out sync=false"
         pipe = Gst.parse_launch(desc)
+        # o caminho é definido por propriedade: no texto do pipeline a barra invertida é caractere
+        # de escape e "C:\Users\..." perderia as barras (o arquivo iria parar em outra pasta)
+        pipe.get_by_name("out").set_property("location", path)
         pipe.use_clock(Gst.SystemClock.obtain())
         encoders.configure(pipe.get_by_name("venc"), enc, ow, oh, o.fps, o.quality)
         src = pipe.get_by_name("src")
