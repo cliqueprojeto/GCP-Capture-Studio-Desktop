@@ -22,7 +22,7 @@ Desenvolvido por **Bruno Albertini | [Gestão Cultural Pro](https://gestaocultur
 Baixe a versão mais recente na página de [versões publicadas](https://github.com/cliqueprojeto/GCP-Capture-Studio-Desktop/releases/latest):
 
 - **gcp-capture-studio-x.y.z-1-any.pkg.tar.zst** — BigLinux, Manjaro e Arch Linux: abra o arquivo pelo gerenciador de arquivos (Pamac) ou use `sudo pacman -U ./gcp-capture-studio-x.y.z-1-any.pkg.tar.zst`.
-- **GCP-Capture-Studio-x.y.z-linux-all.deb** — Debian 13, Ubuntu 24.04 e derivados: `sudo apt install ./GCP-Capture-Studio-x.y.z-linux-all.deb`.
+- **GCP-Capture-Studio-x.y.z-linux-all.deb** — Debian 13, Ubuntu 25.04 ou mais novos e derivados (precisam dos pacotes do PySide6, que o Ubuntu 24.04 não traz): `sudo apt install ./GCP-Capture-Studio-x.y.z-linux-all.deb`.
 - **GCP-Capture-Studio-x.y.z-linux-noarch.rpm** — Fedora e distribuições compatíveis: `sudo dnf install ./GCP-Capture-Studio-x.y.z-linux-noarch.rpm`.
 - **GCP-Capture-Studio-x.y.z-Windows-x64.exe** — Windows 10 (versão 2004 ou mais nova) e Windows 11, 64 bits.
 

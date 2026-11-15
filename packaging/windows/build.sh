@@ -6,6 +6,7 @@ cd "$(dirname "$0")/../.."
 rm -rf build "dist/GCP Capture Studio"
 pyinstaller --noconfirm --clean --windowed \
   --name "GCP Capture Studio" \
+  --paths . \
   --icon packaging/windows/app.ico \
   --add-data "gcp_capture_studio/assets;gcp_capture_studio/assets" \
   --add-binary "$(cygpath -m "$(command -v ffmpeg.exe)");." \

@@ -27,14 +27,24 @@ jobs:
             cp -r /src /home/builder/src && chown -R builder /home/builder/src
             su builder -c "cd /home/builder/src && sh packaging/build-pkg.sh"
             cp /home/builder/src/dist/*.pkg.tar.zst /src/dist/'
-      - name: Conferir o .deb no Ubuntu 24.04
+      - name: Conferir o .deb no Debian 13
         continue-on-error: true
         run: |
-          docker run --rm -v "$PWD/dist":/dist ubuntu:24.04 bash -c '
+          docker run --rm -v "$PWD/dist":/dist debian:13 bash -c '
             set -e
             export DEBIAN_FRONTEND=noninteractive
             apt-get update >/dev/null
-            apt-get install -y --no-install-recommends /dist/*.deb >/dev/null
+            apt-get install -y --no-install-recommends /dist/*.deb 2>&1 | tail -n 25
+            gcp-capture-studio --version
+            gcp-capture-studio --selftest'
+      - name: Conferir o .deb no Ubuntu 26.04
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD/dist":/dist ubuntu:26.04 bash -c '
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update >/dev/null
+            apt-get install -y --no-install-recommends /dist/*.deb 2>&1 | tail -n 25
             gcp-capture-studio --version
             gcp-capture-studio --selftest'
       - name: Conferir o .rpm no Fedora
@@ -83,8 +93,9 @@ jobs:
       - name: Gerar a pasta do programa
         run: sh packaging/windows/build.sh
       - name: Conferir o programa empacotado
+        timeout-minutes: 5
         run: |
-          "dist/GCP Capture Studio/GCP Capture Studio.exe" --selftest "$PWD/selftest.txt" || true
+          timeout 180 "dist/GCP Capture Studio/GCP Capture Studio.exe" --selftest "$PWD/selftest.txt" || true
           cat selftest.txt
           grep -q "RESULTADO: OK" selftest.txt
       - name: Inno Setup
