@@ -875,6 +875,19 @@ def main(argv: list[str] | None = None) -> int:
         # instalador do Windows: ffmpeg/ffprobe acompanham o programa
         base = os.path.dirname(sys.executable)
         os.environ["PATH"] = os.pathsep.join([base, os.path.join(base, "_internal"), os.environ.get("PATH", "")])
+        # o GStreamer só deve examinar a pasta dos plugins: se examinar a pasta inteira do
+        # programa, carrega e descarrega bibliotecas que não aceitam isso
+        for folder in (os.path.join(base, "_internal", "gst_plugins"), os.path.join(base, "gst_plugins")):
+            if os.path.isdir(folder):
+                for var in ("GST_PLUGIN_PATH", "GST_PLUGIN_PATH_1_0", "GST_PLUGIN_SYSTEM_PATH", "GST_PLUGIN_SYSTEM_PATH_1_0"):
+                    os.environ[var] = folder
+                break
+        cache = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "GCP Capture Studio")
+        try:
+            os.makedirs(cache, exist_ok=True)
+            os.environ["GST_REGISTRY"] = os.environ["GST_REGISTRY_1_0"] = os.path.join(cache, f"gst-registry-{__version__}.bin")
+        except OSError:
+            pass
         for folder in (os.path.join(base, "_internal"), base):
             scanner = os.path.join(folder, "gst-plugin-scanner.exe")
             if os.path.isfile(scanner):
