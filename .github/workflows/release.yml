@@ -97,7 +97,11 @@ jobs:
         run: |
           ls "dist/GCP Capture Studio/_internal/gst_plugins" | wc -l
           "dist/GCP Capture Studio/_internal/ffmpeg.exe" -hide_banner -version | head -n 1
-          timeout 180 "dist/GCP Capture Studio/GCP Capture Studio.exe" --selftest "$PWD/selftest.txt" || true
+          find "dist/GCP Capture Studio" -name "*.dll" -o -name "*.pyd" -o -name "*.exe" | while read -r f; do
+            objdump -p "$f" 2>/dev/null | grep -qiE "DLL Name: (avfilter|libwhisper|ggml)" && echo "depende de avfilter/whisper/ggml: $f"
+          done || true
+          GST_DEBUG=GST_PLUGIN_LOADING:4,GST_REGISTRY:4 GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE="$(cygpath -m "$PWD/gst.log")" timeout 180 "dist/GCP Capture Studio/GCP Capture Studio.exe" --selftest "$PWD/selftest.txt" || echo "saída: $?"
+          tail -n 40 gst.log || true
           cat selftest.txt
           grep -q "RESULTADO: OK" selftest.txt
       - name: Inno Setup
