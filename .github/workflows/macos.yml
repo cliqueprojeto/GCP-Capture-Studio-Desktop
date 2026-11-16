@@ -1,0 +1,65 @@
+name: Instalador macOS
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    name: Instalador macOS (Apple Silicon)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: GStreamer, FFmpeg e Python (Homebrew)
+        run: |
+          brew install gstreamer pygobject3 py3cairo ffmpeg dylibbundler
+          "$(brew --prefix)/bin/python3" -m venv --system-site-packages venv
+          venv/bin/pip install --quiet pyinstaller PySide6
+          echo "$PWD/venv/bin" >> "$GITHUB_PATH"
+      - name: Conferir a partir do código
+        run: python -m gcp_capture_studio --selftest
+      - name: Gravação de teste e integrações do macOS
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python packaging/macos/check.py saida-mac
+      - name: Gerar o aplicativo e o .dmg
+        run: sh packaging/macos/build.sh
+      - name: Conferir o aplicativo empacotado
+        timeout-minutes: 5
+        run: |
+          APP="dist/GCP Capture Studio.app"
+          du -sh "$APP"
+          ls "$APP/Contents/Frameworks/gst_plugins" | wc -l
+          "$APP/Contents/MacOS/GCP Capture Studio" --selftest "$PWD/selftest.txt" || echo "saída: $?"
+          cat selftest.txt
+          grep -q "RESULTADO: OK" selftest.txt
+          ! grep -q "opusenc" selftest.txt
+          "$APP/Contents/Frameworks/ffmpeg/ffmpeg" -hide_banner -version | head -n 1
+          "$APP/Contents/Frameworks/ffmpeg/ffprobe" -hide_banner -version | head -n 1
+          # gravação real da tela pelo programa empacotado (vídeo H.264 + conversão final para MP4)
+          mkdir -p saida-app
+          "$APP/Contents/MacOS/GCP Capture Studio" --gravacao-teste "$PWD/saida-app"
+          ffprobe -v error -show_entries stream=codec_name,width,height:format=duration -of compact saida-app/*.mp4
+          ffmpeg -v error -y -ss 2 -i saida-app/gravacao-teste.mp4 -frames:v 1 saida-app/quadro-app.png
+          # abre a interface por alguns segundos: o programa precisa continuar aberto
+          "$APP/Contents/MacOS/GCP Capture Studio" > app.log 2>&1 &
+          pid=$!
+          sleep 15
+          kill -0 $pid && echo "interface aberta" || { cat app.log; exit 1; }
+          kill $pid || true
+          tail -n 20 app.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conferencia-macos
+          path: |
+            saida-mac/quadro.png
+            saida-app/quadro-app.png
+            selftest.txt
+            app.log
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-macos
+          path: dist/*.dmg
+          if-no-files-found: error

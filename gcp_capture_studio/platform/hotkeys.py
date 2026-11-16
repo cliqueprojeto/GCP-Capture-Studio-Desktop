@@ -3,6 +3,7 @@
 - KDE Plasma (Wayland e X11): KGlobalAccel via D-Bus — funciona com qualquer janela em foco.
 - Outros ambientes Wayland: portal GlobalShortcuts.
 - Windows: RegisterHotKey.
+- macOS: RegisterEventHotKey (Carbon).
 - Reserva: atalhos locais do Qt (ativos quando uma janela do aplicativo está em foco).
 """
 from __future__ import annotations
@@ -73,6 +74,12 @@ class GlobalHotkeys(QObject):
             self._win = WinHotkeys(self)
             self._win.triggered.connect(self.triggered.emit)
             self.backend = "win"
+        elif sys.platform == "darwin":
+            from .mac import MacHotkeys
+
+            self._win = MacHotkeys(self)
+            self._win.triggered.connect(self.triggered.emit)
+            self.backend = "win" if self._win.available else "none"
         elif self.bus is None:
             pass
         elif _has_name(self.bus, KGA):

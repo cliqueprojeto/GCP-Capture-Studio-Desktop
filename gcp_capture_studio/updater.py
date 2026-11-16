@@ -39,6 +39,8 @@ def package_kind() -> str | None:
     """Formato de pacote deste sistema: exe, pkg, deb, rpm (ou None se desconhecido)."""
     if sys.platform.startswith("win"):
         return "exe"
+    if sys.platform == "darwin":
+        return "dmg"
     if not sys.platform.startswith("linux"):
         return None
     info = {}
@@ -60,7 +62,7 @@ def package_kind() -> str | None:
     return None
 
 
-_SUFFIX = {"exe": ".exe", "pkg": ".pkg.tar.zst", "deb": ".deb", "rpm": ".rpm"}
+_SUFFIX = {"exe": ".exe", "dmg": ".dmg", "pkg": ".pkg.tar.zst", "deb": ".deb", "rpm": ".rpm"}
 
 
 def install_command(kind: str, path: str) -> list[str] | None:
@@ -159,7 +161,7 @@ class Updater(QObject):
 
     # -- download e instalação ---------------------------------------------------
     def can_install(self, info: dict) -> bool:
-        return bool(info.get("asset_url")) and (info.get("kind") == "exe" or install_command(info.get("kind", ""), "x") is not None)
+        return bool(info.get("asset_url")) and (info.get("kind") in ("exe", "dmg") or install_command(info.get("kind", ""), "x") is not None)
 
     def download_and_install(self, info: dict) -> None:
         if self.busy or not info.get("asset_url"):
@@ -225,6 +227,19 @@ class Updater(QObject):
                 return
             self.busy = False
             self.installed.emit(True, "exe")
+            return
+        if kind == "dmg":
+            try:
+                subprocess.Popen(["open", path], close_fds=True)  # abre a imagem: basta arrastar para Aplicativos
+            except OSError as exc:
+                self._fail(f"Não foi possível abrir o instalador: {exc}")
+                return
+            self.busy = False
+            self.installed.emit(
+                True,
+                f"Versão {info['version']} baixada. Feche o programa e arraste o GCP Capture Studio da janela aberta "
+                "para a pasta Aplicativos, substituindo o anterior.",
+            )
             return
         cmd = install_command(kind or "", path)
         if not cmd:

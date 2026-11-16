@@ -34,13 +34,13 @@ except Exception:  # noqa: BLE001
 
 @dataclass
 class CaptureSource:
-    kind: str  # pipewire | x11 | test
+    kind: str  # pipewire | x11 | win | mac | test
     node: int = 0
     open_fd: object = None  # callable -> novo fd PipeWire
     size: tuple[int, int] = (0, 0)  # tamanho do fluxo em pixels
     crop: tuple[int, int, int, int] | None = None  # x, y, w, h em pixels do fluxo
     show_cursor: bool = True
-    handle: int = 0  # Windows: HMONITOR do monitor gravado
+    handle: int = 0  # Windows: HMONITOR do monitor gravado; macOS: índice do monitor
 
     def out_size(self) -> tuple[int, int]:
         w, h = (self.crop[2], self.crop[3]) if self.crop else self.size
@@ -109,7 +109,11 @@ class Recorder(QObject):
                 f"d3d11download ! videorate ! video/x-raw,framerate={fps}/1"
             )
         if s.kind == "mac":
-            return f"avfvideosrc name=src capture-screen=true capture-screen-cursor={'true' if s.show_cursor else 'false'} ! videorate ! video/x-raw,framerate={fps}/1"
+            return (
+                f"avfvideosrc name=src capture-screen=true device-index={s.handle} "
+                f"capture-screen-cursor={'true' if s.show_cursor else 'false'} do-timestamp=true ! "
+                f"videorate ! video/x-raw,framerate={fps}/1"
+            )
         w, h = s.size
         return f"videotestsrc name=src is-live=true pattern=ball ! video/x-raw,width={w},height={h},framerate={fps}/1"
 

@@ -57,7 +57,7 @@ jobs:
             gcp-capture-studio --selftest'
       - uses: actions/upload-artifact@v4
         with:
-          name: linux
+          name: instalador-linux
           path: dist/*
           if-no-files-found: error
 
@@ -115,13 +115,16 @@ jobs:
           ls -la dist/*.exe
       - uses: actions/upload-artifact@v4
         with:
-          name: windows
+          name: instalador-windows
           path: dist/*.exe
           if-no-files-found: error
 
+  macos:
+    uses: ./.github/workflows/macos.yml
+
   publicar:
     name: Publicar a versão
-    needs: [linux, windows]
+    needs: [linux, windows, macos]
     if: ${{ always() && startsWith(github.ref, 'refs/tags/v') && needs.linux.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -129,6 +132,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: saida
+          pattern: instalador-*
           merge-multiple: true
       - name: Hashes e notas
         run: |

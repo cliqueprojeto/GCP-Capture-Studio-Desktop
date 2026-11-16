@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 1.5.0
+
+- **Nova versão para macOS** (Apple Silicon, macOS 15 ou mais novo), distribuída em `.dmg`: gravação da tela inteira e de região pelo AVFoundation, codificação por GPU (VideoToolbox), microfone e áudio em AAC nativo, atalhos globais, efeitos de clique e de teclas, barra, lupa e moldura do zoom fora do vídeo, webcam e envio ao editor de vídeo.
+- No Mac, o som do sistema é gravado por um dispositivo de áudio virtual (por exemplo, o BlackHole), que aparece automaticamente como opção.
+- As atualizações pelo GitHub também valem no Mac: o programa baixa o `.dmg`, confere o SHA-256 e abre a imagem para a substituição.
+
 ## 1.4.0
 
 - **Editores instalados por Snap agora são encontrados** (por exemplo, o OpenShot no Manjaro/Arch, que fica fora do PATH). A busca passou a olhar também Flatpak, AppImage (pastas Applications/AppImages/Downloads) e os atalhos do menu de aplicativos; no macOS, a pasta Aplicativos.

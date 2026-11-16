@@ -26,18 +26,49 @@ class AudioDevice:
 
 
 WINDOWS = sys.platform.startswith("win")
+MACOS = sys.platform == "darwin"
+# no macOS o som do sistema só pode ser gravado por um dispositivo de áudio virtual (ex.: BlackHole)
+_MAC_LOOPBACK = ("blackhole", "loopback", "soundflower", "background music", "ishowu", "virtual")
+
+
+def _mac_inputs() -> list[AudioDevice]:
+    """Entradas de áudio do macOS (CoreAudio) pelo monitor de dispositivos do GStreamer."""
+    out: list[AudioDevice] = []
+    try:
+        mon = Gst.DeviceMonitor.new()
+        mon.add_filter("Audio/Source", None)
+        mon.start()
+        devices = mon.get_devices() or []
+        mon.stop()
+        for dev in devices:
+            try:
+                el = dev.create_element(None)
+                ident = el.get_property("device") if el is not None and el.find_property("device") else None
+            except Exception:  # noqa: BLE001
+                ident = None
+            if ident is not None:
+                out.append(AudioDevice(str(ident), dev.get_display_name()))
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _is_loopback(dev: AudioDevice) -> bool:
+    return any(k in dev.label.lower() for k in _MAC_LOOPBACK)
 
 
 def source_fragment(device: str, client: str = "GCP Capture Studio", loopback: bool = False) -> str:
     """Trecho de pipeline que captura o dispositivo. No Linux a saída do sistema é gravada pela fonte
-    de monitoramento; no Windows, pelo modo loopback do WASAPI."""
+    de monitoramento; no Windows, pelo modo loopback do WASAPI; no macOS, por um dispositivo virtual."""
     if WINDOWS:
         return "wasapi2src low-latency=false" + (" loopback=true" if loopback else "")
+    if MACOS:
+        return f"osxaudiosrc device={int(device)}" if str(device).isdigit() else "osxaudiosrc"
     return f'pulsesrc device="{device}" client-name="{client}"'
 
 
 def sink_fragment(device: str = "") -> str:
-    if WINDOWS:
+    if WINDOWS or MACOS:
         return "autoaudiosink"
     return f'pulsesink device="{device}"' if device and device != "default" else "pulsesink"
 
@@ -72,6 +103,8 @@ def _label(item: dict) -> str:
 
 def microphones() -> list[AudioDevice]:
     """Entradas reais (microfones internos, headsets e interfaces de áudio USB)."""
+    if MACOS:
+        return [d for d in _mac_inputs() if not _is_loopback(d)]
     return [
         AudioDevice(s["name"], _label(s))
         for s in _json("sources")
@@ -82,6 +115,8 @@ def microphones() -> list[AudioDevice]:
 
 def outputs() -> list[AudioDevice]:
     """Saídas (alto-falantes, fones, interfaces USB) com a respectiva fonte de monitoramento."""
+    if MACOS:  # dispositivos virtuais que recebem o som do sistema
+        return [AudioDevice(d.name, d.label, d.name) for d in _mac_inputs() if _is_loopback(d)]
     return [AudioDevice(s["name"], _label(s), s.get("monitor_source") or s["name"] + ".monitor") for s in _json("sinks")]
 
 
@@ -96,6 +131,8 @@ def default_sink() -> str:
 def resolve_mic(name: str) -> str:
     if WINDOWS:
         return "default"  # dispositivo de gravação padrão do Windows
+    if MACOS:
+        return name if name and name != "default" and any(d.name == name for d in microphones()) else "default"
     if name and name != "default" and any(d.name == name for d in microphones()):
         return name
     return default_source()
@@ -105,6 +142,12 @@ def resolve_system(name: str) -> str:
     """Fonte de monitoramento da saída escolhida (grava o que toca nos alto-falantes/fones)."""
     if WINDOWS:
         return "default"  # saída padrão do Windows, em loopback
+    if MACOS:
+        outs = outputs()
+        for d in outs:
+            if d.name == name:
+                return d.name
+        return outs[0].name if outs else ""
     outs = outputs()
     target = name if name and name != "default" else default_sink()
     for d in outs:

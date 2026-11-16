@@ -396,6 +396,15 @@ class Controller(QObject):
                 "handle": win.monitor_handle(geo.x() + 8, geo.y() + 8),
             }
             QTimer.singleShot(150, lambda: self._source_ready(info))
+        elif sys.platform == "darwin":
+            from .platform import mac
+
+            geo, dpr = self._target.geometry(), self._target.devicePixelRatio()
+            info = {
+                "kind": "mac", "position": (geo.x(), geo.y()), "size": (round(geo.width() * dpr), round(geo.height() * dpr)),
+                "handle": mac.display_index(geo.x(), geo.y()),
+            }
+            QTimer.singleShot(150, lambda: self._source_ready(info))
         else:
             virt = QGuiApplication.primaryScreen().virtualGeometry()
             QTimer.singleShot(0, lambda: self._source_ready({"kind": "x11", "position": (virt.x(), virt.y()), "size": (virt.width(), virt.height()), "virtual": True}))
@@ -490,7 +499,7 @@ class Controller(QObject):
         target = self._target or QGuiApplication.primaryScreen()
         if info.get("virtual"):
             geo = QGuiApplication.primaryScreen().virtualGeometry()
-        elif info["kind"] in ("test", "win"):
+        elif info["kind"] in ("test", "win", "mac"):
             geo = target.geometry()
         else:
             match = [s for s in screens if s.geometry().topLeft() == QPoint(px, py)]
@@ -655,6 +664,11 @@ class Controller(QObject):
 
             o = self.overlay
             self._marked(sum(win.exclude_from_capture(w) for w in (self.recbar, o.lenswin, o.zoomframe, o.zoomview)))
+        elif sys.platform == "darwin":
+            from .platform import mac
+
+            o = self.overlay
+            self._marked(sum(mac.exclude_from_capture(w) for w in (self.recbar, o.lenswin, o.zoomframe, o.zoomview)))
         else:
             self.kwin.hide_from_capture(HIDDEN_PREFIX)
 
@@ -841,7 +855,12 @@ def _selftest(report: str) -> int:
         from .engine import encoders, recorder
 
         needed = ["matroskamux", "videoconvert", "videorate", "audiomixer", "appsink", "tee"]
-        needed += ["d3d11screencapturesrc", "wasapi2src"] if sys.platform.startswith("win") else ["pipewiresrc", "pulsesrc"]
+        if sys.platform.startswith("win"):
+            needed += ["d3d11screencapturesrc", "wasapi2src"]
+        elif sys.platform == "darwin":
+            needed += ["avfvideosrc", "osxaudiosrc"]
+        else:
+            needed += ["pipewiresrc", "pulsesrc"]
         for name in needed:
             found = Gst.ElementFactory.find(name) is not None
             ok = ok and found
@@ -868,35 +887,82 @@ def _selftest(report: str) -> int:
     return 0 if ok else 1
 
 
+def _record_test(out_dir: str) -> int:
+    """Grava alguns segundos da tela principal pelo motor do programa e informa o resultado
+    (conferência automática do programa empacotado)."""
+    from .engine.recorder import CaptureSource, Recorder, RecordOptions
+
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    screen = QGuiApplication.primaryScreen()
+    geo, dpr = screen.geometry(), screen.devicePixelRatio()
+    size = (round(geo.width() * dpr), round(geo.height() * dpr))
+    if sys.platform == "darwin":
+        from .platform import mac
+
+        src = CaptureSource(kind="mac", size=size, handle=mac.display_index(geo.x(), geo.y()))
+    elif sys.platform.startswith("win"):
+        from .platform import win
+
+        src = CaptureSource(kind="win", size=size, handle=win.monitor_handle(geo.x() + 8, geo.y() + 8))
+    else:
+        src = CaptureSource(kind="test", size=size)
+    rec = Recorder()
+    result: dict[str, str] = {}
+    rec.finished.connect(lambda p: (result.update(path=p), app.quit()))
+    rec.failed.connect(lambda m: (result.update(error=m), app.quit()))
+    rec.started.connect(lambda: QTimer.singleShot(4000, rec.stop))
+    QTimer.singleShot(0, lambda: rec.start(src, RecordOptions(fps=30, quality="media", out_dir=out_dir, basename="gravacao-teste")))
+    QTimer.singleShot(90000, app.quit)
+    app.exec()
+    if "path" in result:
+        print(f"gravação: {result['path']}")
+        return 0
+    print(f"gravação FALHOU: {result.get('error', 'sem resposta')}")
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     if "--version" in argv:
         print(f"{APP_NAME} {__version__}")
         return 0
     if getattr(sys, "frozen", False):
-        # instalador do Windows: ffmpeg/ffprobe acompanham o programa
+        # programa empacotado (Windows e macOS): ffmpeg/ffprobe acompanham o programa
         base = os.path.dirname(sys.executable)
-        os.environ["PATH"] = os.pathsep.join([base, os.path.join(base, "_internal"), os.environ.get("PATH", "")])
+        inner = getattr(sys, "_MEIPASS", os.path.join(base, "_internal"))
+        os.environ["PATH"] = os.pathsep.join(
+            [base, inner, os.path.join(inner, "ffmpeg"), os.path.join(base, "_internal"), os.environ.get("PATH", "")]
+        )
         # o GStreamer só deve examinar a pasta dos plugins: se examinar a pasta inteira do
         # programa, carrega e descarrega bibliotecas que não aceitam isso
-        for folder in (os.path.join(base, "_internal", "gst_plugins"), os.path.join(base, "gst_plugins")):
+        for folder in (os.path.join(inner, "gst_plugins"), os.path.join(base, "_internal", "gst_plugins"), os.path.join(base, "gst_plugins")):
             if os.path.isdir(folder):
                 for var in ("GST_PLUGIN_PATH", "GST_PLUGIN_PATH_1_0", "GST_PLUGIN_SYSTEM_PATH", "GST_PLUGIN_SYSTEM_PATH_1_0"):
                     os.environ[var] = folder
                 break
-        cache = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "GCP Capture Studio")
+        if sys.platform == "darwin":
+            cache = os.path.expanduser("~/Library/Caches/GCP Capture Studio")
+        else:
+            cache = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "GCP Capture Studio")
         try:
             os.makedirs(cache, exist_ok=True)
             os.environ["GST_REGISTRY"] = os.environ["GST_REGISTRY_1_0"] = os.path.join(cache, f"gst-registry-{__version__}.bin")
         except OSError:
             pass
-        for folder in (os.path.join(base, "_internal"), base):
-            scanner = os.path.join(folder, "gst-plugin-scanner.exe")
-            if os.path.isfile(scanner):
-                os.environ["GST_PLUGIN_SCANNER"] = scanner
-                break
+        for folder in (inner, os.path.join(base, "_internal"), base):
+            for name in ("gst-plugin-scanner.exe", "gst-plugin-scanner"):
+                scanner = os.path.join(folder, name)
+                if os.path.isfile(scanner):
+                    os.environ["GST_PLUGIN_SCANNER"] = scanner
+                    break
+            else:
+                continue
+            break
     if "--selftest" in argv:
         return _selftest(argv[argv.index("--selftest") + 1] if len(argv) > argv.index("--selftest") + 1 else "")
+    if "--gravacao-teste" in argv:
+        i = argv.index("--gravacao-teste")
+        return _record_test(argv[i + 1] if len(argv) > i + 1 else os.path.expanduser("~"))
     if sys.platform.startswith("linux") and "QT_QPA_PLATFORM" not in os.environ:
         # XWayland/X11: permite janelas sempre no topo, posicionamento livre e cliques que atravessam a camada de anotações
         os.environ["QT_QPA_PLATFORM"] = os.environ.get("GCP_CAPTURE_QPA", "xcb")

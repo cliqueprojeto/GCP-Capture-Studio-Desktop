@@ -159,3 +159,5 @@ class ClickWatcher(QObject):
 if sys.platform.startswith("win"):
     # no Windows não existe /dev/input: mesma interface, por consulta ao estado das teclas
     from .win import WinInputWatcher as ClickWatcher  # noqa: E402,F811
+elif sys.platform == "darwin":
+    from .mac import MacInputWatcher as ClickWatcher  # noqa: E402,F811

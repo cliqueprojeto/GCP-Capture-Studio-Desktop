@@ -5,6 +5,7 @@ import copy
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
@@ -18,7 +19,7 @@ def _videos_dir() -> str:
             return os.path.join(base, "GCP Capture Studio")
     except Exception:
         pass
-    return str(Path.home() / "Videos" / "GCP Capture Studio")
+    return str(Path.home() / ("Movies" if sys.platform == "darwin" else "Videos") / "GCP Capture Studio")
 
 
 # id -> (rótulo, grupo, atalho padrão)
@@ -50,7 +51,11 @@ SHORTCUT_ACTIONS: dict[str, tuple[str, str, str]] = {
 
 
 def default_shortcuts() -> dict[str, str]:
-    return {k: v[2] for k, v in SHORTCUT_ACTIONS.items()}
+    keys = {k: v[2] for k, v in SHORTCUT_ACTIONS.items()}
+    if sys.platform == "darwin":
+        # o macOS não aceita atalhos globais só com Option (Alt): ferramentas ficam em ⌘ + Option + número
+        keys = {k: ("Ctrl+" + v if v.startswith("Alt+") else v) for k, v in keys.items()}
+    return keys
 
 
 DEFAULTS: dict = {

@@ -25,6 +25,7 @@ Baixe a versão mais recente na página de [versões publicadas](https://github.
 - **GCP-Capture-Studio-x.y.z-linux-all.deb** — Debian 13, Ubuntu 25.04 ou mais novos e derivados (precisam dos pacotes do PySide6, que o Ubuntu 24.04 não traz): `sudo apt install ./GCP-Capture-Studio-x.y.z-linux-all.deb`.
 - **GCP-Capture-Studio-x.y.z-linux-noarch.rpm** — Fedora e distribuições compatíveis: `sudo dnf install ./GCP-Capture-Studio-x.y.z-linux-noarch.rpm`.
 - **GCP-Capture-Studio-x.y.z-Windows-x64.exe** — Windows 10 (versão 2004 ou mais nova) e Windows 11, 64 bits.
+- **GCP-Capture-Studio-x.y.z-macOS-arm64.dmg** — macOS 15 (Sequoia) ou mais novo, em Macs com Apple Silicon (M1 ou mais recente): abra o `.dmg` e arraste o **GCP Capture Studio** para a pasta **Aplicativos**.
 
 Os pacotes Linux instalam o gravador e trazem o editor Kdenlive como dependência ou recomendação. Os hashes SHA-256 de todos os arquivos ficam em `SHA256SUMS.txt` na própria versão.
 
@@ -32,12 +33,14 @@ Os pacotes Linux instalam o gravador e trazem o editor Kdenlive como dependênci
 
 Como o instalador do Windows não tem assinatura digital de código, o sistema pode mostrar "O Windows protegeu o computador". Clique em **Mais informações** e depois em **Executar assim mesmo**. No Windows, instale também o [Kdenlive](https://kdenlive.org/pt-br/download/) para a edição.
 
+**Primeira abertura no macOS.** O aplicativo não é distribuído pela App Store nem autenticado pela Apple, então na primeira vez o macOS avisa que não pode verificá-lo. Feche o aviso, abra **Ajustes do Sistema › Privacidade e Segurança**, role até a mensagem sobre o GCP Capture Studio e clique em **Abrir Mesmo Assim**. Na primeira gravação, autorize o programa em **Gravação de Tela e Áudio do Sistema** e em **Microfone** (e, para o mostrador de teclas, em **Monitoramento de Entrada**); depois de autorizar a gravação de tela, feche e abra o programa. No Mac, instale também o [Kdenlive](https://kdenlive.org/pt-br/download/), o [Shotcut](https://shotcut.org/download/) ou o [OpenShot](https://www.openshot.org/pt/download/) para a edição.
+
 ## O que ele faz
 
 ### Gravar
 - **Tela inteira, janela ou região**, com seleção em todos os monitores ao mesmo tempo — cada monitor aparece identificado pelo nome e a área pode ser marcada em qualquer um.
 - Contagem regressiva configurável, **pausar e retomar** sem perder a gravação e opção de descartar.
-- **Aceleração por GPU quando disponível** (VA-API em AMD/Intel, NVENC, Quick Sync, Media Foundation), com queda automática para CPU se a GPU falhar. Um teste de desempenho nas configurações mostra o que cada codificador rende na sua máquina.
+- **Aceleração por GPU quando disponível** (VA-API em AMD/Intel, NVENC, Quick Sync, Media Foundation, VideoToolbox no Mac), com queda automática para CPU se a GPU falhar. Um teste de desempenho nas configurações mostra o que cada codificador rende na sua máquina.
 - 15, 24, 30 ou 60 quadros por segundo e quatro níveis de qualidade.
 - Resultado em **MP4 (H.264 + AAC)**, pronto para editar ou publicar.
 - Monitores com escala (por exemplo, notebook a 125%) são gravados na resolução real.
@@ -102,9 +105,14 @@ Por padrão, o programa verifica se há versão nova no GitHub ao abrir. Em **Co
 - Microfone e som do sistema usam os **dispositivos padrão** do Windows.
 - A exclusão da barra e da lupa do vídeo requer Windows 10 versão 2004 ou mais nova.
 
+**macOS**
+- macOS 15 (Sequoia) ou mais novo, em Macs com Apple Silicon.
+- Tela inteira e região; a gravação por janela usa a seleção por região. A barra, a lupa na tela e a moldura do zoom ficam fora do vídeo.
+- O macOS não permite gravar o som do sistema diretamente: instale um dispositivo de áudio virtual gratuito, como o [BlackHole](https://existential.audio/blackhole/), e ele aparece como opção de som do sistema.
+- Os atalhos de ferramentas usam **⌘ Command + Option + número** (o macOS não aceita atalhos globais só com Option). No Mac, as teclas F9 e F10 podem exigir a tecla **fn**.
+
 **Geral**
 - O zoom acompanhando o mouse é aplicado no vídeo gravado; a sua tela continua normal, com a moldura e a miniatura como referência.
-- macOS ainda não é suportado.
 
 ## Privacidade
 
@@ -112,20 +120,21 @@ As gravações são feitas e salvas no seu computador. O GCP Capture Studio não
 
 ## Para desenvolvedores
 
-O GCP Capture Studio é escrito em Python com Qt 6 (PySide6) e GStreamer; a captura usa PipeWire e o portal de desktop no Linux e Direct3D 11 no Windows.
+O GCP Capture Studio é escrito em Python com Qt 6 (PySide6) e GStreamer; a captura usa PipeWire e o portal de desktop no Linux, Direct3D 11 no Windows e AVFoundation no macOS.
 
 ```bash
 python3 -m gcp_capture_studio            # roda a partir do código
 python3 -m gcp_capture_studio --selftest # confere captura, codificadores e efeitos disponíveis
 sh packaging/build-pkg.sh                # gera o .pkg.tar.zst (Arch/Manjaro/BigLinux)
 sh packaging/build-linux.sh              # gera o .deb e o .rpm
+sh packaging/macos/build.sh              # gera o .app e o .dmg (no macOS, com Homebrew)
 ```
 
 | Pasta | Conteúdo |
 |---|---|
 | `gcp_capture_studio/engine` | Motor de gravação: portal/PipeWire, pipeline GStreamer, codificadores, áudio, efeitos compostos no vídeo |
 | `gcp_capture_studio/ui` | Tela inicial, contagem, anotações, barra de gravação, webcam, configurações, atualização e apoio |
-| `gcp_capture_studio/platform` | Integrações com o sistema: atalhos globais, ponteiro e janelas (KWin), cliques e teclas, Windows |
+| `gcp_capture_studio/platform` | Integrações com o sistema: atalhos globais, ponteiro e janelas (KWin), cliques e teclas, Windows e macOS |
 | `gcp_capture_studio/editor` | Busca dos editores, geração dos projetos do Kdenlive, Shotcut e OpenShot e abertura do editor |
 | `gcp_capture_studio/updater.py` | Verificação e instalação de atualizações pelo GitHub |
 | `packaging` | Receitas dos pacotes Linux e do instalador do Windows |

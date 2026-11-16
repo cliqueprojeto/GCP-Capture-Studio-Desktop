@@ -147,6 +147,9 @@ def benchmark(width: int = 1920, height: int = 1080, frames: int = 90) -> dict[s
 
 def audio_encoder() -> tuple[str, str]:
     """Retorna (fragmento de pipeline, codec)."""
+    at = Gst.ElementFactory.make("atenc", None)  # AAC nativo do macOS (AudioToolbox)
+    if at is not None:
+        return "atenc" + (" bitrate=192000" if at.find_property("bitrate") is not None else "") + " ! aacparse", "aac"
     for name, frag in (
         ("fdkaacenc", "fdkaacenc bitrate=192000"),
         ("avenc_aac", "avenc_aac bitrate=192000"),
