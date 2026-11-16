@@ -1,6 +1,6 @@
 """GCP Capture Studio — gravador de tela com anotações em tempo real e editor integrado."""
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 APP_NAME = "GCP Capture Studio"
 APP_ID = "br.com.gestaoculturalpro.CaptureStudio"

@@ -2,7 +2,7 @@
 # Pacote para BigLinux / Manjaro / Arch Linux.
 # Gere com:  cd packaging && makepkg -f      Instale com:  sudo pacman -U gcp-capture-studio-*.pkg.tar.zst
 pkgname=gcp-capture-studio
-pkgver=1.4.0
+pkgver=1.5.0
 pkgrel=1
 pkgdesc="Gravador de tela com anotações em tempo real e editor de vídeo integrado"
 arch=('any')
