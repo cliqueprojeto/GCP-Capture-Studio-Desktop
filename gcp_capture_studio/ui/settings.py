@@ -153,6 +153,57 @@ class SettingsDialog(QDialog):
         sw.clicked.connect(pick)
         return sw
 
+    # -- editor de vídeo ---------------------------------------------------------
+    def _fill_editors(self) -> None:
+        c = self.editor_combo
+        c.clear()
+        installed = bridge.installed_editors()
+        for k in bridge.EDITORS:
+            c.addItem(bridge.EDITORS[k][0] + ("" if k in installed else " (não instalado)"), k)
+        custom = self.s.get("editor.custom_path") or ""
+        if custom:
+            ok = bridge.custom_command(custom) is not None
+            c.addItem(f"{bridge.custom_name(custom)} (personalizado)" + ("" if ok else " — não encontrado"), bridge.CUSTOM)
+            c.setItemData(c.count() - 1, custom, Qt.ToolTipRole)
+        c.addItem("Escolher outro editor…", "__pick")
+        c.setCurrentIndex(max(0, c.findData(self.s.get("editor.app"))))
+
+    def _editor_chosen(self, _i: int) -> None:
+        data = self.editor_combo.currentData()
+        if data == "__pick":
+            self._pick_editor()
+        else:
+            self.s.set("editor.app", data)
+
+    def _pick_editor(self) -> None:
+        import os
+        import sys
+
+        if sys.platform.startswith("win"):
+            start = os.environ.get("ProgramFiles", "C:\\")
+            filters = "Programas e atalhos (*.exe *.lnk);;Todos os arquivos (*)"
+        elif sys.platform == "darwin":
+            start = "/Applications"
+            filters = "Aplicativos (*.app);;Todos os arquivos (*)"
+        else:
+            start = "/usr/share/applications"
+            filters = "Atalhos e programas (*.desktop *.AppImage *.appimage);;Todos os arquivos (*)"
+        path, _ = QFileDialog.getOpenFileName(self, "Escolher o editor de vídeo", start, filters)
+        if path:
+            if bridge.custom_command(path) is None:
+                from PySide6.QtWidgets import QMessageBox
+
+                self._fill_editors()
+                QMessageBox.warning(
+                    self, "Editor de vídeo",
+                    "Esse arquivo não pode ser aberto como programa. Escolha o executável do editor ou o atalho dele "
+                    "(.desktop no Linux, .lnk ou .exe no Windows, .app no macOS).",
+                )
+                return
+            self.s.set("editor.custom_path", path)
+            self.s.set("editor.app", bridge.CUSTOM)
+        self._fill_editors()
+
     # -- páginas ---------------------------------------------------------------
     def _general(self) -> QWidget:
         page, g = _page()
@@ -183,9 +234,16 @@ class SettingsDialog(QDialog):
         )
         g.addWidget(separator(), r, 0, 1, 2)
         r += 1
-        installed = bridge.installed_editors()
-        items = [(bridge.EDITORS[k][0] + ("" if k in installed else " (não instalado)"), k) for k in bridge.EDITORS]
-        r = _row(g, r, "Editor de vídeo integrado", self._combo("editor.app", items), "Kdenlive recebe a gravação já posicionada na linha do tempo.")
+        self.editor_combo = QComboBox()
+        self.editor_combo.setFixedWidth(300)
+        self.editor_combo.activated.connect(self._editor_chosen)
+        self._fill_editors()
+        r = _row(
+            g, r, "Editor de vídeo", self.editor_combo,
+            "Kdenlive, Shotcut e OpenShot (inclusive por Snap, Flatpak ou AppImage) recebem a gravação já na linha "
+            "do tempo. Em “Escolher outro editor…” indique o programa ou o atalho dele; outros editores recebem o "
+            "arquivo de vídeo.",
+        )
         r = _row(g, r, "Enviar ao editor ao terminar a gravação", self._toggle("editor.auto_open"))
         r = _row(
             g, r, "Fechar o gravador ao enviar ao editor", self._toggle("editor.close_after"),
@@ -550,7 +608,7 @@ class SettingsDialog(QDialog):
         lay.addSpacing(6)
         lay.addWidget(support, 0, Qt.AlignLeft)
         lay.addSpacing(14)
-        lay.addWidget(label("Tecnologias: Qt 6 · GStreamer · PipeWire · FFmpeg · Kdenlive (editor).", "small", wrap=True))
+        lay.addWidget(label("Tecnologias: Qt 6 · GStreamer · PipeWire · FFmpeg · Kdenlive, Shotcut e OpenShot (editores).", "small", wrap=True))
         return page
 
     def showEvent(self, ev) -> None:

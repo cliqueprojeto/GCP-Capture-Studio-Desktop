@@ -110,7 +110,7 @@ DEFAULTS: dict = {
         "zoom_preview_pos": None,
     },
     "tools": {"color": "#ef4444", "width": 5, "text_size": 28, "blur_strength": 14},
-    "editor": {"app": "kdenlive", "auto_open": True, "close_after": True},
+    "editor": {"app": "kdenlive", "custom_path": "", "auto_open": True, "close_after": True},
     "shortcuts": default_shortcuts(),
     "portal": {"tokens": {}},  # permissão de captura lembrada por monitor
     "updates": {"frequency": "startup", "last_check": ""},  # startup | daily | weekly | never

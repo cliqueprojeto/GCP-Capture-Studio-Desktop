@@ -315,8 +315,10 @@ class Controller(QObject):
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def open_editor(self) -> None:
-        if not self.bridge.launch_editor(self.settings.get("editor.app")):
-            self.launcher.set_status("Nenhum editor de vídeo encontrado. Instale o Kdenlive para editar suas gravações.", "warn")
+        if not self.bridge.launch_editor(self.settings.get("editor.app"), self.settings.get("editor.custom_path")):
+            self.launcher.set_status(
+                "Nenhum editor de vídeo encontrado. Instale o Kdenlive ou escolha o seu editor em Configurações › Geral.", "warn"
+            )
 
     # -- escolha de área ---------------------------------------------------------
     def _launcher_screen(self) -> QRect:
@@ -787,7 +789,7 @@ class Controller(QObject):
         self._apply_hotkeys()
         name = os.path.basename(path)
         if self.settings.get("editor.auto_open"):
-            ok, msg = self.bridge.open_in_editor(path, self.settings.get("editor.app"))
+            ok, msg = self.bridge.open_in_editor(path, self.settings.get("editor.app"), self.settings.get("editor.custom_path"))
             if ok and self.settings.get("editor.close_after", True):
                 # a gravação seguiu para o editor: o gravador se encerra (janelas, bandeja e atalhos),
                 # para que nenhuma tecla inicie outra gravação por cima enquanto se edita

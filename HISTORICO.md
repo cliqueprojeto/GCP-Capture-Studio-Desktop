@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 1.4.0
+
+- **Editores instalados por Snap agora são encontrados** (por exemplo, o OpenShot no Manjaro/Arch, que fica fora do PATH). A busca passou a olhar também Flatpak, AppImage (pastas Applications/AppImages/Downloads) e os atalhos do menu de aplicativos; no macOS, a pasta Aplicativos.
+- **Shotcut e OpenShot recebem a gravação já na linha do tempo**, como o Kdenlive: o programa gera o projeto do próprio editor (`.mlt` ou `.osp`) com vídeo e áudio no início da trilha.
+- **Escolha do seu editor:** em Configurações › Geral › Editor de vídeo, "Escolher outro editor…" aceita o programa ou o atalho dele (`.desktop`, AppImage, `.exe`, `.lnk` ou `.app`). Se for Kdenlive, Shotcut ou OpenShot, a gravação entra na linha do tempo; outros editores recebem o arquivo de vídeo.
+
 ## 1.3.1
 
 - **Windows: as gravações voltaram a ser salvas.** O vídeo era gravado, mas o arquivo ia parar fora da pasta escolhida e o programa avisava "Nada foi gravado". Agora ele é salvo na pasta das gravações, em MP4.

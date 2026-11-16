@@ -2,7 +2,7 @@
 
 **Gravador de tela com desenhos, lupa, zoom e efeitos do mouse em tempo real — e a gravação já chega pronta na linha do tempo do editor de vídeo.**
 
-O GCP Capture Studio foi feito para quem grava aulas, tutoriais e apresentações: você escolhe a área, ajusta microfone e som do sistema, aperta gravar e anota na tela enquanto fala. Tudo o que você desenha e destaca entra no vídeo na hora, sem etapa de pós-produção. Ao parar, a gravação abre no editor (Kdenlive) já posicionada na linha do tempo. Interface em português, sem cadastro, e seus vídeos ficam no seu computador.
+O GCP Capture Studio foi feito para quem grava aulas, tutoriais e apresentações: você escolhe a área, ajusta microfone e som do sistema, aperta gravar e anota na tela enquanto fala. Tudo o que você desenha e destaca entra no vídeo na hora, sem etapa de pós-produção. Ao parar, a gravação abre no editor (Kdenlive, Shotcut, OpenShot ou o que você escolher) já posicionada na linha do tempo. Interface em português, sem cadastro, e seus vídeos ficam no seu computador.
 
 Desenvolvido por **Bruno Albertini | [Gestão Cultural Pro](https://gestaoculturalpro.com.br/)**.
 
@@ -66,7 +66,8 @@ Como o instalador do Windows não tem assinatura digital de código, o sistema p
 - Fica **fixa onde você posicionar**: arraste para mover, role o mouse para redimensionar, duplo clique alterna o formato.
 
 ### Editar
-- Ao parar, a gravação é enviada ao **Kdenlive** já na linha do tempo, com vídeo e áudio agrupados e o projeto no formato exato do vídeo.
+- Ao parar, a gravação é enviada ao **Kdenlive** já na linha do tempo, com vídeo e áudio agrupados e o projeto no formato exato do vídeo. **Shotcut** e **OpenShot** também recebem a gravação na linha do tempo.
+- O editor é encontrado mesmo instalado por Snap, Flatpak ou AppImage. Em Configurações › Geral, "Escolher outro editor…" aceita qualquer programa ou atalho (`.desktop`, AppImage, `.exe`, `.lnk`, `.app`); editores fora desses três recebem o arquivo de vídeo.
 - Depois de enviar, o gravador se encerra para que nenhuma tecla inicie outra gravação enquanto você edita (opcional).
 - Shotcut e OpenShot também são reconhecidos como editores alternativos.
 
@@ -125,7 +126,7 @@ sh packaging/build-linux.sh              # gera o .deb e o .rpm
 | `gcp_capture_studio/engine` | Motor de gravação: portal/PipeWire, pipeline GStreamer, codificadores, áudio, efeitos compostos no vídeo |
 | `gcp_capture_studio/ui` | Tela inicial, contagem, anotações, barra de gravação, webcam, configurações, atualização e apoio |
 | `gcp_capture_studio/platform` | Integrações com o sistema: atalhos globais, ponteiro e janelas (KWin), cliques e teclas, Windows |
-| `gcp_capture_studio/editor` | Geração do projeto do Kdenlive e abertura do editor |
+| `gcp_capture_studio/editor` | Busca dos editores, geração dos projetos do Kdenlive, Shotcut e OpenShot e abertura do editor |
 | `gcp_capture_studio/updater.py` | Verificação e instalação de atualizações pelo GitHub |
 | `packaging` | Receitas dos pacotes Linux e do instalador do Windows |
 
