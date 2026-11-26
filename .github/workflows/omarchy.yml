@@ -29,10 +29,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd dist
-          VER=$(ls gcp-capture-studio-*.pkg.tar.zst | sed -E 's/gcp-capture-studio-(.*)-any\.pkg\.tar\.zst/\1/')
+          SRC=$(ls dist/gcp-capture-studio-*.pkg.tar.zst)
+          VER=$(basename "$SRC" | sed -E 's/gcp-capture-studio-(.*)-any\.pkg\.tar\.zst/\1/')
           NAME="gcp-capture-studio-omarchy-${VER}-any.pkg.tar.zst"
-          mv gcp-capture-studio-*.pkg.tar.zst "$NAME"
+          mkdir -p "$RUNNER_TEMP/out" && cp "$SRC" "$RUNNER_TEMP/out/$NAME"
+          cp packaging/omarchy-notas.md "$RUNNER_TEMP/out/notas.md"
+          cd "$RUNNER_TEMP/out"
           sha256sum "$NAME" > SHA256SUMS-omarchy.txt
           TAG="omarchy-${VER}"
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -40,5 +42,5 @@ jobs:
           else
             gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --latest=false \
               --title "GCP Capture Studio ${VER%-*} para Omarchy (Hyprland)" \
-              --notes-file ../packaging/omarchy-notas.md "$NAME" SHA256SUMS-omarchy.txt
+              --notes-file notas.md "$NAME" SHA256SUMS-omarchy.txt
           fi
