@@ -16,7 +16,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QLineEdit, QWidget
 
-from ..platform.hyprland import settle
+from ..platform.hyprland import is_hyprland, settle
 
 LENS_TITLE = "GCP Capture Studio · lupa"  # mesmo prefixo da barra: fica fora do vídeo
 FRAME_TITLE = "GCP Capture Studio · enquadramento do zoom"
@@ -270,7 +270,9 @@ class _ZoomPreview(QWidget):
         if on == self.shown:
             return
         self.shown = on
-        if on:
+        if is_hyprland():
+            self.setVisible(on)
+        elif on:
             self.clearMask()
         else:
             self.setMask(QRegion(0, 0, 1, 1))
@@ -467,6 +469,13 @@ class AnnotationOverlay(QObject):
 
     def prepare_lens_window(self) -> None:
         """Mapeia a janela da lupa (invisível) para o compositor poder excluí-la da captura."""
+        if is_hyprland():
+            # o Hyprland não exclui janelas do vídeo (lupa e zoom aparecem só no vídeo) e não respeita
+            # a máscara de forma do X: uma janela "escondida" por máscara apareceria como um bloco preto
+            self.zoomview.shown = False
+            for w in (self.lenswin, self.zoomframe, self.zoomview):
+                w.hide()
+            return
         self.lenswin.setMask(QRegion(0, 0, 1, 1))
         self.lenswin.show()
         self.zoomframe.setMask(QRegion(0, 0, 1, 1))
@@ -495,6 +504,10 @@ class AnnotationOverlay(QObject):
 
     def set_holes(self, rects: list[QRect]) -> None:
         """Abre "furos" na camada que captura o mouse para que barras e a webcam continuem clicáveis."""
+        if is_hyprland():
+            # sem máscara (o furo apareceria preto): a barra e a webcam ficam acima da camada de desenho
+            self.catcher.clearMask()
+            return
         region = QRegion(self.catcher.rect())
         for r in rects:
             region -= QRegion(r.translated(-self.origin).adjusted(-2, -2, 2, 2))

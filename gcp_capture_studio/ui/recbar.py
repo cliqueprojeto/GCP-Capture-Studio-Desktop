@@ -218,6 +218,7 @@ class RecBar(QWidget):
             if t == QEvent.MouseButtonPress and ev.button() == Qt.LeftButton:
                 self._press = ev.globalPosition().toPoint()
                 self._drag = self._press - self.pos()
+                self._settle_token = None  # arrastada pelo usuário: nada a confirmar
                 self._moved = False
             elif t == QEvent.MouseMove and self._press is not None and ev.buttons() & Qt.LeftButton:
                 gp = ev.globalPosition().toPoint()
@@ -280,8 +281,22 @@ class RecBar(QWidget):
 
     def set_shown(self, on: bool) -> None:
         """Oculta/mostra sem desmapear a janela (preserva a exclusão da captura no compositor)."""
+        from ..platform.hyprland import is_hyprland, settle
+
         self.shown = on
-        if on:
+        if is_hyprland():
+            # o Hyprland não exclui janelas da captura e mostraria a janela mascarada como um bloco preto
+            if on:
+                self.clearMask()
+                if not self.isVisible():
+                    target = self.geometry()
+                    self.show()
+                    # o Hyprland leva janelas novas para o monitor em foco: confirma a posição escolhida
+                    settle(self, target, stop_when_placed=True)
+                self.raise_()
+            else:
+                self.hide()
+        elif on:
             self.clearMask()
         else:
             self.setMask(QRegion(0, 0, 1, 1))
@@ -291,6 +306,7 @@ class RecBar(QWidget):
         """Alterna entre o widget discreto e a barra completa, mantendo o centro horizontal."""
         if on == self.expanded and self.body.isVisible() == on:
             return
+        self._settle_token = None  # tamanho mudou: a confirmação de posição anterior não vale mais
         center_x, top_y = self.geometry().center().x(), self.y()
         self.expanded = on
         self.pill.setVisible(not on)
@@ -342,6 +358,7 @@ class RecBar(QWidget):
     def mousePressEvent(self, ev) -> None:
         if ev.button() == Qt.LeftButton:
             self._drag = ev.globalPosition().toPoint() - self.pos()
+            self._settle_token = None
 
     def mouseMoveEvent(self, ev) -> None:
         if self._drag is not None and ev.buttons() & Qt.LeftButton:

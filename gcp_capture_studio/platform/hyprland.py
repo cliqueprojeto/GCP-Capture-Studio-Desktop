@@ -204,7 +204,7 @@ def managed(flags):
     return flags
 
 
-def settle(widget, rect=None) -> None:
+def settle(widget, rect=None, stop_when_placed: bool = False) -> None:
     """Confirma a posição de uma janela logo depois de mapeada.
 
     O Hyprland trata uma janela X mapeada exatamente em (0,0) como "sem posição" e a centraliza;
@@ -218,6 +218,11 @@ def settle(widget, rect=None) -> None:
 
     target = _QRect(rect) if rect is not None else widget.geometry()
     title = widget.windowTitle()
+    token = object()
+    try:
+        widget._settle_token = token  # o programa cancela (None) quando o usuário move ou redimensiona a janela
+    except (AttributeError, RuntimeError):
+        pass
     pid = os.getpid()
     state = {"until": time.monotonic() + 15.0}
 
@@ -234,7 +239,7 @@ def settle(widget, rect=None) -> None:
 
     def alive() -> bool:
         try:
-            return widget.isVisible()
+            return widget.isVisible() and getattr(widget, "_settle_token", token) is token
         except RuntimeError:  # a janela já foi destruída (ex.: seletor de área fechado)
             return False
 
@@ -242,6 +247,8 @@ def settle(widget, rect=None) -> None:
         if not alive() or time.monotonic() > state["until"]:
             return
         ok = placed()
+        if ok and stop_when_placed and state.get("opened"):
+            return  # no lugar depois de mapeada: daqui em diante o usuário pode arrastá-la à vontade
         if ok is False:
             # ida e volta em instantes separados (o Qt ignora um pedido igual à posição que ainda supõe
             # ter) e com mais de 2 px (abaixo disso o Hyprland ignora a mudança)
@@ -268,6 +275,7 @@ def settle(widget, rect=None) -> None:
 
     def on_open(opened_title: str) -> None:
         if opened_title.startswith(title):
+            state["opened"] = True
             release()
             QTimer.singleShot(30, nudge)
 

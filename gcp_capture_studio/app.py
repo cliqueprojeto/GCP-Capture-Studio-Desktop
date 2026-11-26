@@ -608,7 +608,8 @@ class Controller(QObject):
         self._place_bar()
         self._excluded = False
         self.recbar.set_shown(False)
-        self.recbar.show()  # mapeada (invisível) para o compositor poder excluí-la da captura
+        if not self.hyprland:
+            self.recbar.show()  # mapeada (invisível) para o compositor poder excluí-la da captura
         self.overlay.prepare_lens_window()
         self.overlay.place_private_windows(geo, local.translated(geo.topLeft()))
         self._mark_tries = 0
@@ -684,6 +685,15 @@ class Controller(QObject):
         h = self.recbar.height()
         return self.capture_local.bottom() + h + 8 <= self.screen_geo.height() or self.capture_local.top() - h - 8 >= 0
 
+    def _capture_global(self) -> QRect:
+        return self.capture_local.translated(self.screen_geo.topLeft())
+
+    def _other_screen(self):
+        """Outro monitor (não gravado), onde a barra fica visível sem entrar no vídeo."""
+        cap = self._capture_global()
+        others = [s for s in QGuiApplication.screens() if not s.geometry().intersects(cap)]
+        return others[0] if others else None
+
     def _place_bar(self) -> None:
         """Posição inicial do widget: a escolhida pelo usuário ou o topo central da tela gravada."""
         self.recbar.set_expanded(False)
@@ -691,7 +701,18 @@ class Controller(QObject):
         bw, bh = self.recbar.width(), self.recbar.height()
         g, c = self.screen_geo, self.capture_local
         pos = self.settings.get("capture.bar_pos")
-        if pos and g.contains(QPoint(pos[0] + bw // 2, pos[1] + bh // 2)):
+        other = self._other_screen() if not getattr(self.kwin, "can_exclude", True) else None
+        if other is not None:
+            # Hyprland não tira a barra do vídeo: com mais de um monitor, ela fica no monitor não gravado
+            # (ou onde o usuário a deixou, desde que fora da área gravada)
+            saved = QRect(pos[0], pos[1], bw, bh) if pos else QRect()
+            on_screen = not saved.isNull() and QGuiApplication.screenAt(saved.center()) is not None
+            if on_screen and not saved.intersects(self._capture_global()):
+                x, y = pos
+            else:
+                og = other.geometry()
+                x, y = og.x() + (og.width() - bw) // 2, og.y() + 48
+        elif pos and g.contains(QPoint(pos[0] + bw // 2, pos[1] + bh // 2)):
             x, y = pos
         else:
             x = g.x() + c.center().x() - bw // 2
@@ -748,7 +769,8 @@ class Controller(QObject):
         if self._excluded:
             want = widget
         else:
-            want = (widget and not full and self._bar_fits_outside()) or not self.hotkeys.is_global
+            outside = not self.recbar.geometry().intersects(self._capture_global())
+            want = (widget and (outside or (not full and self._bar_fits_outside()))) or not self.hotkeys.is_global
         if self.recbar.expanded:
             want = True  # aberta pelo usuário: permanece
         self.set_bar_visible(want)
@@ -773,7 +795,10 @@ class Controller(QObject):
         self._refresh_tray()
 
     def _keep_bar_on_screen(self) -> None:
-        g, b = self.screen_geo, self.recbar
+        b = self.recbar
+        here = QGuiApplication.screenAt(b.geometry().center())
+        # a barra pode estar em outro monitor (Hyprland, fora do vídeo): mantém-na dentro do monitor onde está
+        g = here.geometry() if here is not None and self.hyprland else self.screen_geo
         x = max(g.x() + 4, min(b.x(), g.x() + g.width() - b.width() - 4))
         y = max(g.y() + 4, min(b.y(), g.y() + g.height() - b.height() - 4))
         if (x, y) != (b.x(), b.y()):
