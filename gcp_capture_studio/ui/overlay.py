@@ -443,6 +443,7 @@ class AnnotationOverlay(QObject):
         self.lens_excluded = False  # o compositor mantém a janela da lupa fora do vídeo
         self.hypr = is_hyprland()
         self.preview_screen = QRect()  # Hyprland: outro monitor (não gravado) para a miniatura do zoom
+        self._zoom_view = QRectF()  # Hyprland: moldura do pan desenhada na camada de anotações
         self._frame_rect = QRect()
         self.keycap: list | None = None  # [texto, instante ao pressionar, instante ao soltar]
         self._last_fx = QRect()
@@ -483,6 +484,7 @@ class AnnotationOverlay(QObject):
 
     def hide(self) -> None:
         self.active = False
+        self._zoom_view = QRectF()
         self.anim.stop()
         self.lens_timer.stop()
         self.poll.stop()
@@ -740,20 +742,19 @@ class AnnotationOverlay(QObject):
         if zooming and self.fx("zoom_frame"):
             s = self.frame_scale
             fw, fh = self.recorder.source.out_size()
-            fr.outside = 0.0 if self.lens_excluded else 14.0
+            view = QRectF(self.capture.x() + vx / s, self.capture.y() + vy / s, fw / z / s, fh / z / s)
             if self.hypr and not self.lens_excluded:
-                if not fr.isVisible():
-                    open_on_screen(fr, self._frame_rect)
-                    fr.show()
-                    settle(fr, self._frame_rect)
+                # na própria camada de anotações (janela que sempre funciona no Hyprland), por fora da área
+                # enquadrada: aparece na tela e fica fora do vídeo com zoom
+                self._set_zoom_view(view)
             else:
+                fr.outside = 0.0
                 fr.clearMask()
-            fr.set_view(QRectF(self.capture.x() + vx / s, self.capture.y() + vy / s, fw / z / s, fh / z / s))
-        elif not fr.view.isNull() or (self.hypr and fr.isVisible()):
-            fr.set_view(QRectF())
-            if self.hypr and not self.lens_excluded:
-                fr.hide()
-            else:
+                fr.set_view(view)
+        else:
+            self._set_zoom_view(QRectF())
+            if not fr.view.isNull():
+                fr.set_view(QRectF())
                 fr.setMask(QRegion(0, 0, 1, 1))
         pv = self.zoomview
         show = usable and self._zoom_preview_on()
@@ -761,6 +762,39 @@ class AnnotationOverlay(QObject):
         if show:
             pv.update()
         self._sync_preview()
+
+    _ZOOM_MARGIN = 14.0
+
+    def _set_zoom_view(self, view: QRectF) -> None:
+        if view == self._zoom_view:
+            return
+        old, self._zoom_view = self._zoom_view, view
+        m = self._ZOOM_MARGIN + 8
+        region = QRegion()
+        for r in (old, view):
+            if not r.isNull():
+                outer = r.adjusted(-m, -m, m, m).toAlignedRect()
+                region += QRegion(outer) - QRegion(r.adjusted(4, 4, -4, -4).toAlignedRect())
+        self.canvas.update(region)
+
+    def _paint_zoom_view(self, p: QPainter) -> None:
+        """Moldura do pan (Hyprland): por fora do enquadramento, para não entrar no vídeo com zoom."""
+        if self._zoom_view.isNull():
+            return
+        m = self._ZOOM_MARGIN
+        r = self._zoom_view.adjusted(-m, -m, m, m)
+        p.save()
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QPen(QColor(0, 0, 0, 110), 4))
+        p.drawRoundedRect(r, 6, 6)
+        p.setPen(QPen(QColor(99, 193, 238, 235), 2))
+        p.drawRoundedRect(r, 6, 6)
+        p.setPen(QPen(QColor("#63c1ee"), 4, Qt.SolidLine, Qt.RoundCap))
+        n = min(22.0, r.width() / 4, r.height() / 4)
+        for cx, cy, sx, sy in ((r.left(), r.top(), 1, 1), (r.right(), r.top(), -1, 1), (r.left(), r.bottom(), 1, -1), (r.right(), r.bottom(), -1, -1)):
+            p.drawLine(QPointF(cx, cy), QPointF(cx + sx * n, cy))
+            p.drawLine(QPointF(cx, cy), QPointF(cx, cy + sy * n))
+        p.restore()
 
     def _sync_lens(self) -> None:
         """Atualiza a lupa do vídeo e a janela da lupa para a posição atual do ponteiro."""
@@ -1003,6 +1037,7 @@ class AnnotationOverlay(QObject):
             self._paint_spotlight(p)
         if self.layer is not None:
             p.drawPixmap(0, 0, self.layer)
+        self._paint_zoom_view(p)
         if self.live is not None:
             if self.live.kind == "blur":
                 p.setPen(QPen(QColor(255, 255, 255, 220), 1.5, Qt.DashLine))
