@@ -1,0 +1,44 @@
+name: Instalador Omarchy
+
+# Versão separada para o Omarchy/Hyprland: roda só na branch "omarchy" e publica um pré-lançamento
+# (não vira a versão "latest", que o atualizador dos outros sistemas consulta).
+on:
+  push:
+    branches: [omarchy]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pkg:
+    name: Pacote .pkg.tar.zst para Omarchy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gerar .pkg.tar.zst
+        run: |
+          docker run --rm -v "$PWD":/src archlinux:base-devel bash -c '
+            set -e
+            pacman -Syu --noconfirm python >/dev/null
+            useradd -m builder
+            cp -r /src /home/builder/src && chown -R builder /home/builder/src
+            su builder -c "cd /home/builder/src && sh packaging/build-pkg.sh"
+            mkdir -p /src/dist && cp /home/builder/src/dist/*.pkg.tar.zst /src/dist/'
+      - name: Publicar pré-lançamento
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          VER=$(ls gcp-capture-studio-*.pkg.tar.zst | sed -E 's/gcp-capture-studio-(.*)-any\.pkg\.tar\.zst/\1/')
+          NAME="gcp-capture-studio-omarchy-${VER}-any.pkg.tar.zst"
+          mv gcp-capture-studio-*.pkg.tar.zst "$NAME"
+          sha256sum "$NAME" > SHA256SUMS-omarchy.txt
+          TAG="omarchy-${VER}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$NAME" SHA256SUMS-omarchy.txt --clobber
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "GCP Capture Studio ${VER%-*} para Omarchy (Hyprland)" \
+              --notes-file ../packaging/omarchy-notas.md "$NAME" SHA256SUMS-omarchy.txt
+          fi
