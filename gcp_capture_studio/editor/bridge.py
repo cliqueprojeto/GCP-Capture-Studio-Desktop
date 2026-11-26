@@ -47,7 +47,23 @@ def _editor_env() -> dict | None:
     para as próprias bibliotecas; se o editor herdar isso, tenta carregar os plugins Qt do gravador
     e não abre ("no Qt platform plugin could be initialized")."""
     if not getattr(sys, "frozen", False):
-        return None
+        saved = os.environ.get("GCP_CAPTURE_ORIG_ENV")
+        if not saved:
+            return None
+        # Hyprland: o gravador força o XWayland (e escalas próprias); o editor volta ao ambiente da sessão
+        import json
+
+        env = dict(os.environ)
+        env.pop("GCP_CAPTURE_ORIG_ENV", None)
+        try:
+            for key, value in json.loads(saved).items():
+                if value is None:
+                    env.pop(key, None)
+                else:
+                    env[key] = value
+        except ValueError:
+            pass
+        return env
     base = os.path.normcase(os.path.dirname(sys.executable))
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith(_PRIVATE_ENV)}
     env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep) if p and not os.path.normcase(p).startswith(base))

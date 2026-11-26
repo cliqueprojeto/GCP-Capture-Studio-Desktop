@@ -1,5 +1,19 @@
 # Histórico de versões
 
+## 1.5.1
+
+- **Suporte ao Hyprland (Omarchy).** O programa abria cada janela como um bloco da grade do Hyprland (tela inicial, camada de anotações, barra, lupa, contagem), o que tornava a gravação inutilizável. Agora ele registra as próprias regras de janela: tudo flutua, e as camadas de gravação ficam fixas, sem borda, sombra nem animação, em todos os espaços de trabalho.
+- No Hyprland, o programa sempre abre pelo XWayland (o Omarchy define `QT_QPA_PLATFORM=wayland;xcb`, e em Wayland nativo as camadas não podem ser posicionadas) e ajusta a escala em telas HiDPI quando o XWayland trabalha em pixels reais (`force_zero_scaling`, padrão do Omarchy). O editor de vídeo continua abrindo no ambiente normal da sessão.
+- **Atalhos globais no Hyprland**: F9, F10, Alt+1…9 e os demais são registrados no compositor enquanto o programa está aberto e removidos ao fechar. Atalhos que você já usa na configuração do Hyprland nunca são alterados; a combinação em conflito fica de fora e é indicada em Configurações › Atalhos.
+- Ponteiro, lista de janelas (gravação por janela) e escala de cada monitor vêm do próprio Hyprland, inclusive com vários monitores e escalas fracionárias. O monitor compartilhado pelo portal é reconhecido pelo nome.
+- Efeito de clique no Hyprland mesmo sem acesso ao grupo `input`: o compositor avisa cada clique sem consumi-lo.
+- No Hyprland, a camada de desenho, a camada de anotações, a contagem e a webcam são janelas gerenciadas (fixas, sem moldura e, as que só exibem, sem receber cliques): o Hyprland não entrega o mouse a janelas override-redirect do tipo utilitário e as posiciona errado em telas HiDPI. A barra, a webcam e a miniatura do zoom continuam clicáveis por cima da camada de desenho.
+- Telas HiDPI no Hyprland (por exemplo, notebook em escala 2): as camadas cobrem exatamente o monitor e os desenhos saem sob o ponteiro (o Hyprland centraliza janelas X mapeadas em 0,0 usando o tamanho em pixels; o programa confirma a posição assim que a janela é mapeada).
+- Seletor de área e de janela no Hyprland: abre como camada flutuante do tamanho do monitor (em tela cheia o Hyprland esconde as janelas de trás) e recebe o mouse mesmo com outra janela em foco.
+- Zoom acompanhando o mouse (pan em tempo real) testado no Hyprland: a posição do ponteiro é lida numa thread própria, sem travar a interface nem a parada da gravação.
+- Atalhos deixados por uma execução que fechou de forma inesperada são removidos na próxima abertura (ou na primeira tecla pressionada).
+- Funciona com a configuração em Lua do Hyprland (0.55 ou mais novo) e com a configuração clássica (`hyprland.conf`). Testado no Hyprland 0.57 (Lua) e 0.53 (clássica), em escala 1 e 2.
+
 ## 1.5.0
 
 - **Nova versão para macOS** (Apple Silicon, macOS 15 ou mais novo), distribuída em `.dmg`: gravação da tela inteira e de região pelo AVFoundation, codificação por GPU (VideoToolbox), microfone e áudio em AAC nativo, atalhos globais, efeitos de clique e de teclas, barra, lupa e moldura do zoom fora do vídeo, webcam e envio ao editor de vídeo.

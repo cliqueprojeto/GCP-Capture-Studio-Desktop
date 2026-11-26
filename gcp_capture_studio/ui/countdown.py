@@ -17,9 +17,12 @@ class Countdown(QWidget):
     cancelled = Signal()
 
     def __init__(self):
-        super().__init__(None, _TOP | Qt.WindowDoesNotAcceptFocus)
+        from ..platform.hyprland import managed
+
+        super().__init__(None, managed(_TOP | Qt.WindowDoesNotAcceptFocus))
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setWindowTitle("GCP Capture Studio — contagem")
         self.resize(460, 250)
         self.value = 3
         self.stop_key = "F10"
@@ -127,7 +130,17 @@ class _SelectorPane(QWidget):
         self.start = None
         self.rect_sel = current.translated(-self.origin) if current and mode == "region" else QRect()
         self.hover = QRect()
-        self.showFullScreen()
+        from ..platform.hyprland import is_hyprland
+
+        if is_hyprland():
+            # no Hyprland, uma janela em tela cheia esconde as de trás (mesmo transparente): flutua do tamanho do monitor
+            from ..platform.hyprland import settle
+
+            self.setGeometry(screen_geometry)
+            self.show()
+            settle(self, screen_geometry)
+        else:
+            self.showFullScreen()
         self.setGeometry(screen_geometry)
         self.raise_()
         if focus:
@@ -277,6 +290,11 @@ class RegionSelector(QObject):
             geo = sc.geometry()
             cur = current if current is not None and geo.contains(current.center()) else None
             pane.begin(geo, mode, windows, cur, screen_label(sc, i) if len(screens) > 1 else "", focus=sc is under)
+        from ..platform import hyprland
+
+        if hyprland.is_hyprland():
+            # o seletor precisa ficar no topo da pilha do X para receber o mouse (ver raise_windows)
+            QTimer.singleShot(120, lambda: self.isVisible() and hyprland.raise_windows(["Selecionar área"], "Selecionar área"))
 
     def _began(self, pane) -> None:
         for other in self.panes:

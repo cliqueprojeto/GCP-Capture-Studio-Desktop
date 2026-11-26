@@ -16,6 +16,8 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QLineEdit, QWidget
 
+from ..platform.hyprland import settle
+
 LENS_TITLE = "GCP Capture Studio · lupa"  # mesmo prefixo da barra: fica fora do vídeo
 FRAME_TITLE = "GCP Capture Studio · enquadramento do zoom"
 PREVIEW_TITLE = "GCP Capture Studio · miniatura do zoom"
@@ -130,7 +132,9 @@ def paint_item(p: QPainter, it: Item) -> None:
 
 class _Canvas(QWidget):
     def __init__(self, owner: "AnnotationOverlay"):
-        super().__init__(None, _OVERLAY_FLAGS | Qt.WindowTransparentForInput)
+        from ..platform.hyprland import managed
+
+        super().__init__(None, managed(_OVERLAY_FLAGS | Qt.WindowTransparentForInput))
         self.owner = owner
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
@@ -145,7 +149,9 @@ class _Canvas(QWidget):
 
 class _Catcher(QWidget):
     def __init__(self, owner: "AnnotationOverlay"):
-        super().__init__(None, _OVERLAY_FLAGS)
+        from ..platform.hyprland import managed
+
+        super().__init__(None, managed(_OVERLAY_FLAGS))
         self.owner = owner
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
@@ -331,6 +337,7 @@ class _TextEntry(QLineEdit):
         super().__init__(None)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowTitle("Texto — GCP Capture Studio")
         self.setPlaceholderText("Digite e tecle Enter")
         self.returnPressed.connect(self._commit)
         self._done = False
@@ -396,6 +403,7 @@ class AnnotationOverlay(QObject):
         self.live: Item | None = None
         self.layer: QPixmap | None = None
         self.origin = QPoint(0, 0)  # canto da tela coberta (coordenadas globais)
+        self._screen_rect = QRect()
         self.capture = QRect()  # área gravada, relativa à janela
         self.frame_scale = 1.0
         self.pointer = QPointF(-1000, -1000)
@@ -421,6 +429,7 @@ class AnnotationOverlay(QObject):
     # -- ciclo de vida -------------------------------------------------------
     def show_on(self, screen_geometry: QRect, capture: QRect, frame_scale: float, global_pointer: bool) -> None:
         self.origin = screen_geometry.topLeft()
+        self._screen_rect = QRect(screen_geometry)
         self.capture = capture
         self.frame_scale = frame_scale
         self.has_global_pointer = global_pointer
@@ -433,6 +442,7 @@ class AnnotationOverlay(QObject):
         self.active = True
         self.canvas.show()
         self.canvas.raise_()
+        settle(self.canvas, screen_geometry)
         self.set_tool("cursor")
         if not global_pointer:
             self.poll.start()
@@ -469,6 +479,7 @@ class AnnotationOverlay(QObject):
     def place_private_windows(self, screen: QRect, capture: QRect) -> None:
         """Posiciona a moldura sobre a tela gravada e a miniatura no canto (ou onde o usuário a deixou)."""
         self.zoomframe.setGeometry(screen)
+        settle(self.zoomframe, screen)
         w = int(self.settings.get("effects.zoom_preview_size", 320))
         h = max(90, round(w * capture.height() / max(1, capture.width())))
         self.zoomview.resize(w + 4, h + 4)
@@ -505,7 +516,10 @@ class AnnotationOverlay(QObject):
             if tool == "cursor":
                 self.catcher.hide()
             else:
+                if not self._screen_rect.isNull():
+                    self.catcher.setGeometry(self._screen_rect)
                 self.catcher.show()
+                settle(self.catcher, self._screen_rect)
                 self.catcher.raise_()
             self._sync_preview()
         self.tool_changed.emit(tool)

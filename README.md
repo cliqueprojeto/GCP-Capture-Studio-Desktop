@@ -21,7 +21,7 @@ Desenvolvido por **Bruno Albertini | [Gestão Cultural Pro](https://gestaocultur
 
 Baixe a versão mais recente na página de [versões publicadas](https://github.com/cliqueprojeto/GCP-Capture-Studio-Desktop/releases/latest):
 
-- **gcp-capture-studio-x.y.z-1-any.pkg.tar.zst** — BigLinux, Manjaro e Arch Linux: abra o arquivo pelo gerenciador de arquivos (Pamac) ou use `sudo pacman -U ./gcp-capture-studio-x.y.z-1-any.pkg.tar.zst`.
+- **gcp-capture-studio-x.y.z-1-any.pkg.tar.zst** — BigLinux, Manjaro, Arch Linux e **Omarchy** (Hyprland): abra o arquivo pelo gerenciador de arquivos (Pamac) ou use `sudo pacman -U ./gcp-capture-studio-x.y.z-1-any.pkg.tar.zst`.
 - **GCP-Capture-Studio-x.y.z-linux-all.deb** — Debian 13, Ubuntu 25.04 ou mais novos e derivados (precisam dos pacotes do PySide6, que o Ubuntu 24.04 não traz): `sudo apt install ./GCP-Capture-Studio-x.y.z-linux-all.deb`.
 - **GCP-Capture-Studio-x.y.z-linux-noarch.rpm** — Fedora e distribuições compatíveis: `sudo dnf install ./GCP-Capture-Studio-x.y.z-linux-noarch.rpm`.
 - **GCP-Capture-Studio-x.y.z-Windows-x64.exe** — Windows 10 (versão 2004 ou mais nova) e Windows 11, 64 bits.
@@ -96,8 +96,9 @@ Por padrão, o programa verifica se há versão nova no GitHub ao abrir. Em **Co
 
 **Linux**
 - Funciona melhor no **KDE Plasma 6 (Wayland)**: é o ambiente em que a barra, a lupa na tela e a moldura do zoom ficam fora do vídeo, os atalhos são globais e o ponteiro é acompanhado com precisão.
+- No **Hyprland** (Omarchy e outras distribuições) o programa registra as próprias regras de janela: a tela inicial, as configurações e as camadas de gravação flutuam em vez de virar blocos da grade, e a barra, a webcam e a camada de anotações ficam fixas em todos os espaços de trabalho. Os atalhos são globais (registrados no Hyprland só enquanto o programa está aberto, sem mexer nos seus atalhos — uma combinação que você já usa fica de fora), o ponteiro é acompanhado com precisão e a seleção de janela lista as janelas abertas. Funciona com a configuração em Lua (Hyprland 0.55 ou mais novo, padrão do Omarchy) e com a configuração clássica (`hyprland.conf`). Como o Hyprland cobre de preto, no vídeo, as janelas ocultas do compartilhamento, a barra é ocultada quando cairia dentro da área gravada, e a lupa e o zoom aparecem só no vídeo. A captura usa o `xdg-desktop-portal-hyprland`.
 - Em outros ambientes Wayland (GNOME, por exemplo) a gravação usa o portal de captura do sistema; a barra é ocultada quando cairia dentro da área gravada, e a lupa e o zoom aparecem só no vídeo.
-- Para os efeitos de clique e de teclas, o usuário precisa pertencer ao grupo `input` (padrão no BigLinux e no Manjaro).
+- Para o mostrador de teclas, o usuário precisa pertencer ao grupo `input` (padrão no BigLinux e no Manjaro; no Omarchy: `sudo usermod -aG input $USER` e entre de novo na sessão). O efeito de clique também usa esse acesso; no Hyprland, sem ele, os cliques são informados pelo próprio compositor.
 - Na primeira gravação em cada monitor, o sistema pede autorização para compartilhar a tela; depois disso a escolha é lembrada.
 
 **Windows**

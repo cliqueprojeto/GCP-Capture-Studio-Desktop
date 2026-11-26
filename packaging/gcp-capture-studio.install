@@ -1,0 +1,18 @@
+# Mensagens exibidas pelo pacman ao instalar/atualizar o GCP Capture Studio.
+
+_aviso() {
+  if [ -n "$(command -v Hyprland 2>/dev/null)" ]; then
+    echo ":: GCP Capture Studio: suporte ao Hyprland (Omarchy) ativo — as janelas do programa flutuam"
+    echo "   e os atalhos (F9, F10, Alt+1…) são registrados no Hyprland enquanto o programa estiver aberto."
+  fi
+  echo ":: Para mostrar as combinações de teclas na tela (e ler os cliques diretamente), seu usuário"
+  echo "   precisa estar no grupo 'input':  sudo usermod -aG input \$USER  (e entre de novo na sessão)."
+}
+
+post_install() {
+  _aviso
+}
+
+post_upgrade() {
+  _aviso
+}

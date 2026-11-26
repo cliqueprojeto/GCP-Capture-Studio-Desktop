@@ -1,6 +1,7 @@
 """Atalhos globais personalizáveis.
 
 - KDE Plasma (Wayland e X11): KGlobalAccel via D-Bus — funciona com qualquer janela em foco.
+- Hyprland (Omarchy e outros): atalhos registrados no compositor pelo socket de controle.
 - Outros ambientes Wayland: portal GlobalShortcuts.
 - Windows: RegisterHotKey.
 - macOS: RegisterEventHotKey (Carbon).
@@ -68,6 +69,9 @@ class GlobalHotkeys(QObject):
         self._registered: list[str] = []
         self._session = None
         self._win = None
+        self._hypr = None
+        self._server = ""
+        self.conflicts: set[str] = set()
         if sys.platform.startswith("win"):
             from .win import WinHotkeys
 
@@ -80,6 +84,8 @@ class GlobalHotkeys(QObject):
             self._win = MacHotkeys(self)
             self._win.triggered.connect(self.triggered.emit)
             self.backend = "win" if self._win.available else "none"
+        elif self._hyprland_ok():
+            self.backend = "hyprland"
         elif self.bus is None:
             pass
         elif _has_name(self.bus, KGA):
@@ -89,7 +95,22 @@ class GlobalHotkeys(QObject):
 
     @property
     def is_global(self) -> bool:
-        return self.backend in ("kde", "portal", "win")
+        return self.backend in ("kde", "portal", "win", "hyprland")
+
+    def _hyprland_ok(self) -> bool:
+        if not sys.platform.startswith("linux"):
+            return False
+        from . import hyprland
+
+        if not hyprland.is_hyprland() or not hyprland.available():
+            return False
+        self._hypr = hyprland.Binds("keys")
+        hyprland.events().reloaded.connect(self._hypr.reapply)
+        return True
+
+    def set_server(self, name: str) -> None:
+        """Endereço do programa em execução: o Hyprland o avisa a cada atalho (ver hyprsend.py)."""
+        self._server = name
 
     def _portal_ok(self) -> bool:
         try:
@@ -112,6 +133,22 @@ class GlobalHotkeys(QObject):
             self._apply_portal(shortcuts)
         elif self.backend == "win":
             self._win.apply(shortcuts)
+        elif self.backend == "hyprland":
+            self._apply_hyprland(shortcuts)
+
+    # -- Hyprland ----------------------------------------------------------------
+    def _apply_hyprland(self, shortcuts: dict[str, str]) -> None:
+        from .hyprland import sender_command
+
+        if not self._server:
+            return
+        wanted = {
+            action: (seq, sender_command(self._server, f"action:{action}"), False)
+            for action, seq in shortcuts.items()
+            if action in SHORTCUT_ACTIONS and seq
+        }
+        self._hypr.set(wanted)
+        self.conflicts = set(self._hypr.conflicts)
 
     # -- KDE -----------------------------------------------------------------
     def _action_id(self, action: str) -> list[str]:
@@ -213,6 +250,9 @@ class GlobalHotkeys(QObject):
     def shutdown(self) -> None:
         if self._win is not None:
             self._win.clear()
+        if self._hypr is not None:
+            self._hypr._wanted = {}
+            self._hypr.clear()
         if self._sub and self.bus is not None:
             self.bus.signal_unsubscribe(self._sub)
             self._sub = 0

@@ -128,6 +128,7 @@ class ScreenCastPortal(QObject):
                 "position": tuple(props.get("position", (0, 0))),
                 "size": tuple(props.get("size", (0, 0))),
                 "source_type": int(props.get("source_type", SRC_MONITOR)),
+                "mapping_id": str(props.get("mapping_id", "") or ""),  # nome do monitor (Hyprland)
             }
         )
 

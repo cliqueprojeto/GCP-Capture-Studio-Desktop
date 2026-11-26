@@ -36,15 +36,28 @@ def _register_with_portal() -> None:
         pass
 
 
+def _make_bridge(parent):
+    """Ponte com o compositor: KWin (KDE Plasma) ou Hyprland (Omarchy e outros)."""
+    from .platform.kwin import KWinBridge
+
+    if sys.platform.startswith("linux"):
+        from .platform import hyprland
+
+        if hyprland.is_hyprland():
+            bridge = hyprland.HyprlandBridge(parent)
+            if bridge.available:
+                return bridge
+    return KWinBridge(parent)
+
+
 class Controller(QObject):
-    def __init__(self, app: QApplication):
+    def __init__(self, app: QApplication, server_name: str = ""):
         super().__init__()
         from .editor import bridge
         from .engine import portal as portal_mod
         from .engine.recorder import Recorder
         from .platform.clicks import ClickWatcher
         from .platform.hotkeys import GlobalHotkeys
-        from .platform.kwin import KWinBridge
         from .ui.countdown import Countdown, RegionSelector
         from .ui.launcher import Launcher
         from .ui.overlay import AnnotationOverlay
@@ -78,9 +91,15 @@ class Controller(QObject):
         self.updater.checked.connect(self._update_checked)
         self._update_dialog = None
         self.recorder = Recorder(self)
-        self.kwin = KWinBridge(self)
+        self.kwin = _make_bridge(self)
+        self.hyprland = getattr(self.kwin, "kind", "") == "hyprland"
+        self._hypr_clicks = False
         self.clicks = ClickWatcher(self)
         self.hotkeys = GlobalHotkeys(self)
+        if server_name:
+            self.hotkeys.set_server(server_name)
+            if self.hyprland:
+                self.kwin.set_server(server_name)
         self.launcher = Launcher(self.settings)
         self.overlay = AnnotationOverlay(self.settings, self.recorder, self)
         self.recbar = RecBar(self.settings)
@@ -134,6 +153,8 @@ class Controller(QObject):
         self.webcam.geometry_changed.connect(self._update_holes)
         O.zoomview.geometry_changed.connect(self._update_holes)
         self.clicks.clicked.connect(O.click)
+        if self.hyprland:
+            self.kwin.clicked.connect(O.click)
         self.clicks.combo.connect(O.show_keys)
         self.clicks.combo_released.connect(O.release_keys)
         self.hotkeys.triggered.connect(self.on_action)
@@ -265,10 +286,19 @@ class Controller(QObject):
             key = f"effects.{action[3:]}"
             self.settings.set(key, not self.settings.get(key))
 
+    def _raise_bars(self) -> None:
+        """Barra, webcam e miniatura acima da camada de desenho (para continuarem clicáveis)."""
+        self.overlay.raise_above(self.recbar, self.webcam)
+        if self.hyprland and self.state in ("countdown", "recording", "paused"):
+            QTimer.singleShot(60, lambda: self.kwin.restack([
+                "GCP Capture Studio — entrada", "GCP Capture Studio · miniatura", "GCP Capture Studio — webcam",
+                "GCP Capture Studio · barra",
+            ]))
+
     def _tool_changed(self, tool: str) -> None:
         self.recbar.set_tool(tool)
         self._update_holes()
-        self.overlay.raise_above(self.recbar, self.webcam)
+        self._raise_bars()
 
     # -- janelas auxiliares ------------------------------------------------------
     def show_launcher(self) -> None:
@@ -479,6 +509,9 @@ class Controller(QObject):
         self.clock.stop()
         self.kwin.stop_pointer()
         self.clicks.configure(False, False)
+        if self._hypr_clicks:
+            self.kwin.watch_clicks(False)
+            self._hypr_clicks = False
         if self._kwin_click:
             self.kwin.set_effect("mouseclick", False)
             self._kwin_click = False
@@ -502,7 +535,13 @@ class Controller(QObject):
         elif info["kind"] in ("test", "win", "mac"):
             geo = target.geometry()
         else:
-            match = [s for s in screens if s.geometry().topLeft() == QPoint(px, py)]
+            match = []
+            if self.hyprland:
+                # o portal do Hyprland informa o monitor pelo nome (mapping_id) ou pela posição lógica
+                name = info.get("mapping_id") or self.kwin.monitor_name_at(px, py)
+                match = [s for s in screens if name and s.name() == name]
+            if not match:
+                match = [s for s in screens if s.geometry().topLeft() == QPoint(px, py)]
             if not match and sw and sh:
                 match = [s for s in screens if s.geometry().size().width() == sw and s.geometry().height() == sh]
             got = match[0] if match else None
@@ -530,9 +569,13 @@ class Controller(QObject):
                     return
             geo = (got or target).geometry()
             # o portal informa o tamanho lógico; com escala no monitor (ex.: 125%) o fluxo tem mais pixels
-            k = self._screen_scales.get((got or target).name(), 1.0)
-            if sw and sh and k > 1.0:
-                sw, sh = round(sw * k), round(sh * k)
+            real = self.kwin.pixel_size((got or target).name()) if self.hyprland else None
+            if real:
+                sw, sh = real
+            else:
+                k = self._screen_scales.get((got or target).name(), 1.0)
+                if sw and sh and k > 1.0:
+                    sw, sh = round(sw * k), round(sh * k)
         if not sw or not sh:
             sw, sh = geo.width(), geo.height()
         scale = sw / max(1, geo.width())
@@ -608,7 +651,7 @@ class Controller(QObject):
                 f"Gravando. {s.get('shortcuts.record_stop')} para parar · {s.get('shortcuts.toggle_bar')} abre as ferramentas.",
                 QSystemTrayIcon.Information, 3500,
             )
-        self.overlay.raise_above(self.recbar, self.webcam)
+        self._raise_bars()
         self._refresh_tray()
 
     def _sync_click_source(self) -> None:
@@ -617,7 +660,12 @@ class Controller(QObject):
             return
         clicks, keys = bool(self.settings.get("effects.click")), bool(self.settings.get("effects.keys"))
         ok = self.clicks.configure(clicks, keys)
-        if clicks and not ok and self.kwin.available and not self._kwin_click:
+        if self.hyprland:
+            # sem acesso a /dev/input: o Hyprland avisa cada clique (sem consumir o clique)
+            want = clicks and not ok
+            if want != self._hypr_clicks:
+                self._hypr_clicks = self.kwin.watch_clicks(want) and want
+        elif clicks and not ok and self.kwin.available and not self._kwin_click:
             # sem acesso aos botões do mouse: usa a animação de clique nativa do KWin
             if not self.kwin.effect_loaded("mouseclick"):
                 self._kwin_click = self.kwin.set_effect("mouseclick", True)
@@ -669,6 +717,11 @@ class Controller(QObject):
 
             o = self.overlay
             self._marked(sum(mac.exclude_from_capture(w) for w in (self.recbar, o.lenswin, o.zoomframe, o.zoomview)))
+        elif not getattr(self.kwin, "can_exclude", True):
+            # Hyprland: janelas ocultas no compartilhamento viram caixas pretas no vídeo; a barra
+            # segue a regra de ficar fora da área gravada e a lupa/zoom aparecem só no vídeo
+            self._mark_tries = 99
+            self._marked(0)
         else:
             self.kwin.hide_from_capture(HIDDEN_PREFIX)
 
@@ -731,7 +784,7 @@ class Controller(QObject):
             return
         self.recbar.set_shown(on)
         if on:
-            self.overlay.raise_above(self.recbar, self.webcam)
+            self._raise_bars()
         self._update_holes()
         self._refresh_tray()
 
@@ -963,9 +1016,25 @@ def main(argv: list[str] | None = None) -> int:
     if "--gravacao-teste" in argv:
         i = argv.index("--gravacao-teste")
         return _record_test(argv[i + 1] if len(argv) > i + 1 else os.path.expanduser("~"))
-    if sys.platform.startswith("linux") and "QT_QPA_PLATFORM" not in os.environ:
-        # XWayland/X11: permite janelas sempre no topo, posicionamento livre e cliques que atravessam a camada de anotações
+    on_hyprland = False
+    if sys.platform.startswith("linux"):
+        from .platform import hyprland
+
+        on_hyprland = hyprland.is_hyprland()
+    if on_hyprland and "GCP_CAPTURE_ORIG_ENV" not in os.environ:
+        import json
+
+        os.environ["GCP_CAPTURE_ORIG_ENV"] = json.dumps({k: os.environ.get(k) for k in ("QT_QPA_PLATFORM", "QT_SCREEN_SCALE_FACTORS")})
+    if sys.platform.startswith("linux") and ("QT_QPA_PLATFORM" not in os.environ or on_hyprland):
+        # XWayland/X11: permite janelas sempre no topo, posicionamento livre e cliques que atravessam a camada de anotações.
+        # No Hyprland vale mesmo com QT_QPA_PLATFORM definido (o Omarchy usa "wayland;xcb"): em Wayland nativo
+        # o programa não consegue posicionar a barra, a lupa nem a camada de anotações.
         os.environ["QT_QPA_PLATFORM"] = os.environ.get("GCP_CAPTURE_QPA", "xcb")
+    if on_hyprland and not any(os.environ.get(v) for v in ("QT_SCREEN_SCALE_FACTORS", "QT_SCALE_FACTOR")):
+        # XWayland em pixels reais (force_zero_scaling, padrão do Omarchy): interface no tamanho certo em telas HiDPI
+        factors = hyprland.screen_scale_env()
+        if factors:
+            os.environ["QT_SCREEN_SCALE_FACTORS"] = factors
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(argv)
     app.setApplicationName("gcp-capture-studio")
@@ -988,10 +1057,34 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     QLocalServer.removeServer(APP_ID)
     server = QLocalServer()
+    server.setSocketOptions(QLocalServer.UserAccessOption)
     server.listen(APP_ID)
 
-    ctl = Controller(app)
-    server.newConnection.connect(lambda: (server.nextPendingConnection(), ctl.show_launcher()))
+    ctl = Controller(app, server.fullServerName())
+
+    def on_message(conn) -> None:
+        """Mensagens de outra abertura ("show") e dos atalhos do Hyprland ("action:…", "click:…")."""
+        for raw in bytes(conn.readAll()).decode("utf-8", "replace").split("\n"):
+            msg = raw.strip()
+            if msg.startswith("action:"):
+                action = msg[7:]
+                if action in SHORTCUT_ACTIONS:
+                    ctl.on_action(action)
+            elif msg.startswith("click:"):
+                if ctl.state in ("recording", "paused") and ctl._hypr_clicks:
+                    ctl.overlay.click(msg[6:])
+            elif msg:
+                ctl.show_launcher()
+
+    def on_connection() -> None:
+        while server.hasPendingConnections():
+            conn = server.nextPendingConnection()
+            conn.readyRead.connect(lambda c=conn: on_message(c))
+            conn.disconnected.connect(conn.deleteLater)
+            if conn.bytesAvailable():
+                on_message(conn)
+
+    server.newConnection.connect(on_connection)
     ctl.launcher.show()
     screen = QGuiApplication.primaryScreen().availableGeometry()
     ctl.launcher.adjustSize()

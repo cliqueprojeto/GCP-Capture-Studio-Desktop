@@ -524,9 +524,17 @@ class SettingsDialog(QDialog):
         note = {
             "kde": "Os atalhos são globais: funcionam com qualquer janela em foco. Os de ferramentas e efeitos ficam ativos apenas durante a gravação.",
             "portal": "Os atalhos são registrados no sistema; o ambiente pode pedir confirmação na primeira vez.",
+            "hyprland": "Os atalhos são globais (registrados no Hyprland): funcionam com qualquer janela em foco. "
+            "Os de ferramentas e efeitos ficam ativos apenas durante a gravação. Combinações já usadas na sua "
+            "configuração do Hyprland são preservadas e ficam de fora.",
         }.get(kind, "Neste ambiente os atalhos funcionam quando uma janela do aplicativo está em foco.")
         g.addWidget(label(note, "small", wrap=True), r, 0, 1, 3)
         r += 1
+        taken = sorted(getattr(self.hotkeys, "conflicts", set()) & set(SHORTCUT_ACTIONS))
+        if kind == "hyprland" and taken:
+            names = ", ".join(SHORTCUT_ACTIONS[a][0] for a in taken)
+            g.addWidget(label(f"Já usados no Hyprland (escolha outra combinação): {names}.", "small", wrap=True), r, 0, 1, 3)
+            r += 1
         self.editors: dict[str, QKeySequenceEdit] = {}
         group = None
         for action, (text, grp, _default) in SHORTCUT_ACTIONS.items():

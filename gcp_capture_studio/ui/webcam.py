@@ -30,11 +30,14 @@ class WebcamBubble(QWidget):
     geometry_changed = Signal()
 
     def __init__(self, settings):
+        from ..platform.hyprland import managed
+
         super().__init__(
             None,
-            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.X11BypassWindowManagerHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus,
+            managed(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.X11BypassWindowManagerHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus),
         )
         self.settings = settings
+        self.setWindowTitle("GCP Capture Studio — webcam")
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setCursor(Qt.SizeAllCursor)
