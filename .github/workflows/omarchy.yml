@@ -28,6 +28,7 @@ jobs:
       - name: Publicar pré-lançamento
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           SRC=$(ls dist/gcp-capture-studio-*.pkg.tar.zst)
           VER=$(basename "$SRC" | sed -E 's/gcp-capture-studio-(.*)-any\.pkg\.tar\.zst/\1/')
