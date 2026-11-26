@@ -13,6 +13,9 @@
 - Zoom acompanhando o mouse (pan em tempo real) testado no Hyprland: a posição do ponteiro é lida numa thread própria, sem travar a interface nem a parada da gravação.
 - Atalhos deixados por uma execução que fechou de forma inesperada são removidos na próxima abertura (ou na primeira tecla pressionada).
 - **Dois ou mais monitores no Hyprland:** a barra de gravação fica no monitor que não está sendo gravado, visível, clicável e arrastável, sem entrar no vídeo. Com um monitor só, em tela cheia, ela continua oculta até Ctrl+Alt+D.
+- **Desenhos visíveis com vários monitores no Hyprland:** o Hyprland abre toda janela nova no monitor em foco; se o foco estava no outro monitor ao começar a gravar, a camada de anotações nascia lá e os desenhos não apareciam no monitor gravado. Agora cada camada recebe, antes de abrir, uma regra com o monitor certo (inclusive os painéis do seletor de área, um por monitor). Funciona também com escalas diferentes entre os monitores.
+- **Referência do zoom acompanhando o mouse (pan) na tela:** uma moldura mostra a área que o vídeo está enquadrando, desenhada por fora do enquadramento (não aparece na gravação); com dois monitores, a miniatura ao vivo do zoom fica no monitor não gravado; a barra mostra "ZOOM 2×" enquanto o zoom está ligado.
+- Diagnóstico para suporte: durante a gravação no Hyprland, a posição de cada camada (segundo o Qt e o Hyprland), os monitores e as escalas ficam em `~/.cache/gcp-capture-studio/hyprland-diagnostico.txt`.
 - **Sem blocos pretos na tela:** no Hyprland, a lupa, a moldura e a miniatura do zoom não ficam mais "escondidas por máscara" (o XWayland não repassa a máscara e elas apareciam como retângulos pretos, inclusive no outro monitor); a barra recolhida e a camada de desenho também deixam de usar máscara.
 - Funciona com a configuração em Lua do Hyprland (0.55 ou mais novo) e com a configuração clássica (`hyprland.conf`). Testado no Hyprland 0.57 (Lua) e 0.53 (clássica), em escala 1 e 2.
 

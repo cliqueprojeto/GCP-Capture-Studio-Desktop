@@ -38,6 +38,9 @@ class Countdown(QWidget):
             return
         self.value = seconds
         self.move(center - QPoint(self.width() // 2, self.height() // 2))
+        from ..platform.hyprland import open_on_screen
+
+        open_on_screen(self)
         self.show()
         self.raise_()
         self.timer.start()
@@ -133,10 +136,16 @@ class _SelectorPane(QWidget):
         from ..platform.hyprland import is_hyprland
 
         if is_hyprland():
-            # no Hyprland, uma janela em tela cheia esconde as de trás (mesmo transparente): flutua do tamanho do monitor
-            from ..platform.hyprland import settle
+            # no Hyprland, uma janela em tela cheia esconde as de trás (mesmo transparente): flutua do tamanho do monitor;
+            # cada painel leva o nome do monitor no título para nascer nele (ver open_on_screen)
+            from PySide6.QtGui import QGuiApplication
 
+            from ..platform.hyprland import open_on_screen, settle
+
+            sc = QGuiApplication.screenAt(screen_geometry.center())
+            self.setWindowTitle(f"Selecionar área — GCP Capture Studio [{sc.name() if sc else ''}]")
             self.setGeometry(screen_geometry)
+            open_on_screen(self, screen_geometry)
             self.show()
             settle(self, screen_geometry)
         else:

@@ -3,7 +3,7 @@
 # Gere com:  cd packaging && makepkg -f      Instale com:  sudo pacman -U gcp-capture-studio-*.pkg.tar.zst
 pkgname=gcp-capture-studio
 pkgver=1.5.1
-pkgrel=2
+pkgrel=3
 pkgdesc="Gravador de tela com anotações em tempo real e editor de vídeo integrado"
 arch=('any')
 url="https://github.com/cliqueprojeto/GCP-Capture-Studio-Desktop"

@@ -97,6 +97,9 @@ class WebcamBubble(QWidget):
             self.move(pos[0], pos[1])
         else:
             self.move(screen.right() - size.width() - 36, screen.bottom() - size.height() - 96)
+        from ..platform.hyprland import open_on_screen
+
+        open_on_screen(self)
         self.show()
         self.raise_()
         return True

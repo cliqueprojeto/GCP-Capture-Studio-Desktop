@@ -232,6 +232,7 @@ class Controller(QObject):
             self.webcam.apply()
         elif key.startswith("effects."):
             self.overlay.sync_effects()
+            self._sync_zoom_tag()
             if key in ("effects.click", "effects.keys"):
                 self._sync_click_source()
         elif key in ("audio.mic_volume", "audio.sys_volume") and self.recorder.pipe is not None:
@@ -239,6 +240,10 @@ class Controller(QObject):
             el = self.recorder.pipe.get_by_name(name)
             if el is not None:
                 el.set_property("volume", int(self.settings.get(key)) / 100.0)
+
+    def _sync_zoom_tag(self) -> None:
+        on = bool(self.settings.get("effects.zoom"))
+        self.recbar.set_zoom(float(self.settings.get("effects.zoom_level") or 2.0) if on else 1.0)
 
     def _sync_webcam(self) -> None:
         """A webcam fica visível assim que é ligada, para ser posicionada antes de gravar."""
@@ -295,7 +300,20 @@ class Controller(QObject):
                 "GCP Capture Studio · barra",
             ]))
 
+    def _diagnose(self, event: str, delay: int = 1500) -> None:
+        """Hyprland: registra a posição das camadas (Qt × compositor) para investigar problemas de monitores."""
+        if not self.hyprland:
+            return
+        from .platform import hyprland
+
+        o = self.overlay
+        widgets = {"anotacoes": o.canvas, "desenho": o.catcher, "barra": self.recbar, "moldura": o.zoomframe,
+                   "miniatura": o.zoomview, "webcam": self.webcam}
+        QTimer.singleShot(delay, lambda: self.state in ("countdown", "recording", "paused") and hyprland.diagnose(event, widgets))
+
     def _tool_changed(self, tool: str) -> None:
+        if tool != "cursor":
+            self._diagnose(f"ferramenta {tool}")
         self.recbar.set_tool(tool)
         self._update_holes()
         self._raise_bars()
@@ -605,12 +623,15 @@ class Controller(QObject):
         self.recbar.set_time(0)
         self.recbar.set_paused(False)
         self.recbar.set_history(False, False)
+        self._sync_zoom_tag()
         self._place_bar()
         self._excluded = False
         self.recbar.set_shown(False)
         if not self.hyprland:
             self.recbar.show()  # mapeada (invisível) para o compositor poder excluí-la da captura
         self.overlay.prepare_lens_window()
+        other = self._other_screen() if self.hyprland else None
+        self.overlay.preview_screen = other.geometry() if other is not None else QRect()
         self.overlay.place_private_windows(geo, local.translated(geo.topLeft()))
         self._mark_tries = 0
         QTimer.singleShot(60, self._mark)
@@ -654,6 +675,7 @@ class Controller(QObject):
             )
         self._raise_bars()
         self._refresh_tray()
+        self._diagnose(f"gravação iniciada ({self.settings.get('capture.mode')})", 2500)
 
     def _sync_click_source(self) -> None:
         """Liga a leitura de cliques/teclas somente enquanto há gravação e o efeito está ativo."""

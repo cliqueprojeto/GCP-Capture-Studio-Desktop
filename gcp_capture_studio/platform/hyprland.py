@@ -30,7 +30,7 @@ STATE_NAME = "gcp-capture-studio-hyprland-{}.json"
 
 # títulos das janelas (ver ui/*): camadas de gravação e janelas comuns
 _OVERLAY_TITLES = r"GCP Capture Studio (·|—) .*"
-_SELECTOR_TITLE = r"Selecionar área — GCP Capture Studio( — GCP Capture Studio)?"
+_SELECTOR_TITLE = r"Selecionar área — GCP Capture Studio( \[[^\]]*\])?( — GCP Capture Studio)?"
 _LAUNCHER_TITLE = r"GCP Capture Studio"
 _TEXT_TITLE = r"Texto — GCP Capture Studio( — GCP Capture Studio)?"
 
@@ -202,6 +202,50 @@ def managed(flags):
     if is_hyprland():
         return flags & ~Qt.X11BypassWindowManagerHint
     return flags
+
+
+def _title_regex(title: str) -> str:
+    esc = "".join("\\" + ch if ch in "\\.^$|?*+()[]{}" else ch for ch in title)
+    return f"{esc}( — GCP Capture Studio)?"
+
+
+def open_on_screen(widget, rect=None) -> None:
+    """Antes de mostrar uma janela: diz ao Hyprland em qual monitor ela deve nascer.
+
+    O Hyprland abre toda janela nova no monitor em foco e só depois atende o pedido de posição; com
+    vários monitores, a camada de anotações nascia no monitor errado (os desenhos iam para lá) e o
+    seletor de área empilhava todos os painéis num monitor só. Uma regra com o monitor certo, por título,
+    resolve na origem."""
+    if not is_hyprland():
+        return
+    from PySide6.QtGui import QGuiApplication
+
+    try:
+        g = rect if rect is not None else widget.geometry()
+        screen = QGuiApplication.screenAt(g.center())
+        title = widget.windowTitle()
+    except RuntimeError:
+        return
+    if screen is None or not title:
+        return
+    name = screen.name()
+    if _ASSIGNED.get(title) == name:
+        return
+    cfg = config()
+    match = {"class": _CLASS, "title": _title_regex(title)}
+    if cfg.lua:
+        rule_name = "gcp-capture-studio-mon-" + "".join(ch if ch.isalnum() else "-" for ch in title.lower())[:60]
+        ok = cfg.eval(_lua_rule(rule_name, match, {"monitor": name}))
+    elif cfg.new_rules:
+        ok = cfg.keyword("windowrule", _new_rule(match, {"monitor": name}))
+    else:
+        sel = ",".join(f"{k}:{_anchor(v)}" for k, v in match.items())
+        ok = cfg.keyword("windowrulev2", f"monitor {name}, {sel}")
+    if ok:
+        _ASSIGNED[title] = name
+
+
+_ASSIGNED: dict[str, str] = {}
 
 
 def settle(widget, rect=None, stop_when_placed: bool = False) -> None:
@@ -713,6 +757,51 @@ def raise_windows(prefixes: list[str], focus_prefix: str | None = None) -> int:
     return done
 
 
+def diagnostic_path() -> str:
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    return os.path.join(base, "gcp-capture-studio", "hyprland-diagnostico.txt")
+
+
+def diagnose(event: str, widgets: dict) -> None:
+    """Registra onde cada camada está segundo o Qt e segundo o Hyprland (para investigar problemas de
+    posição/escala com vários monitores). Arquivo: ~/.cache/gcp-capture-studio/hyprland-diagnostico.txt"""
+    try:
+        from PySide6.QtGui import QGuiApplication
+
+        lines = [f"== {time.strftime('%Y-%m-%d %H:%M:%S')} {event}"]
+        ver = query("version", 2.0) or {}
+        lines.append(f"hyprland {ver.get('tag', '?')} lua={config().lua} zero_scaling={force_zero_scaling()} "
+                     f"QT_SCREEN_SCALE_FACTORS={os.environ.get('QT_SCREEN_SCALE_FACTORS', '')!r}")
+        for m in query("monitors", 2.0) or []:
+            lines.append(f"monitor {m.get('name')} {m.get('width')}x{m.get('height')} em {m.get('x')},{m.get('y')} "
+                         f"escala {m.get('scale')} transform {m.get('transform')} foco {m.get('focused')}")
+        for sc in QGuiApplication.screens():
+            g = sc.geometry()
+            lines.append(f"qt-tela {sc.name()} {g.width()}x{g.height()} em {g.x()},{g.y()} dpr {sc.devicePixelRatio()}")
+        for name, w in widgets.items():
+            try:
+                g = w.geometry()
+                lines.append(f"qt {name}: visivel={w.isVisible()} {g.width()}x{g.height()} em {g.x()},{g.y()} "
+                             f"dpr={w.devicePixelRatio()} tela={w.screen().name() if w.screen() else None} titulo={w.windowTitle()!r}")
+            except RuntimeError:
+                pass
+        pid = os.getpid()
+        for c in query("clients", 2.0) or []:
+            if c.get("pid") != pid:
+                continue
+            lines.append(f"hypr {c.get('title', '')[:48]!r}: em {c.get('at')} tam {c.get('size')} monitor {c.get('monitor')} "
+                         f"flutua={c.get('floating')} fixa={c.get('pinned')} mapeada={c.get('mapped')} oculta={c.get('hidden')} "
+                         f"ws={(c.get('workspace') or {}).get('id')}")
+        path = diagnostic_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path) and os.path.getsize(path) > 400_000:
+            os.remove(path)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+    except Exception:  # noqa: BLE001 — diagnóstico nunca pode atrapalhar a gravação
+        pass
+
+
 # -- ponte com a mesma interface da ponte do KWin --------------------------------------------------
 class HyprlandBridge(QObject):
     pointer = Signal(QPoint)
@@ -738,6 +827,7 @@ class HyprlandBridge(QObject):
             events().reloaded.connect(self._reloaded)
 
     def _reloaded(self) -> None:
+        _ASSIGNED.clear()
         install_rules()
         if self._mouse is not None:
             self._mouse.reapply()

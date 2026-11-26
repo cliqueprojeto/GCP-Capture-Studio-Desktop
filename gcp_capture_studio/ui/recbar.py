@@ -10,7 +10,11 @@ from ..config import SHORTCUT_ACTIONS
 from .widgets import LevelMeter, Swatch, tool_button, vline
 
 PALETTE = ["#ef4444", "#f59e0b", "#facc15", "#34d399", "#63c1ee", "#7c5cff", "#ffffff", "#0b0f19"]
-HIDDEN_PREFIX = "GCP Capture Studio ·"  # janelas com este título ficam fora do vídeo
+HIDDEN_PREFIX = "GCP Capture Studio ·"
+_ZOOM_TAG = (
+    "QLabel { background: #63c1ee; color: #08202e; border-radius: 6px; padding: 1px 6px;"
+    " font-size: 11px; font-weight: 800; }"
+)  # janelas com este título ficam fora do vídeo
 
 TOOL_DEFS = [
     ("cursor", "cursor"), ("pen", "pen"), ("highlighter", "highlighter"), ("arrow", "arrow"), ("line", "line"),
@@ -69,6 +73,11 @@ class RecBar(QWidget):
         self.pill_time.setStyleSheet("font-size: 12.5px; font-weight: 700; font-family: 'JetBrains Mono','DejaVu Sans Mono',monospace;")
         pl.addWidget(self.pill_time)
         self.pill_time.setCursor(Qt.SizeAllCursor)
+        # indicador do zoom acompanhando o mouse (a tela não amplia: só o vídeo)
+        self.pill_zoom = QLabel()
+        self.pill_zoom.setStyleSheet(_ZOOM_TAG)
+        self.pill_zoom.hide()
+        pl.addWidget(self.pill_zoom)
         self.expand_btn = tool_button("tools", "", size=18, color=theme.TEXT)
         self.expand_btn.clicked.connect(lambda: self.set_expanded(True))
         pl.addWidget(self.expand_btn)
@@ -103,6 +112,10 @@ class RecBar(QWidget):
         self.time.setStyleSheet("font-size: 19px; font-weight: 700; font-family: 'JetBrains Mono','DejaVu Sans Mono',monospace;")
         self.time.setMinimumWidth(104)
         top.addWidget(self.time)
+        self.zoom_tag = QLabel()
+        self.zoom_tag.setStyleSheet(_ZOOM_TAG)
+        self.zoom_tag.hide()
+        top.addWidget(self.zoom_tag)
         mic = QLabel()
         mic.setPixmap(theme.pixmap("mic", theme.MUTED, 16))
         top.addWidget(mic)
@@ -281,7 +294,7 @@ class RecBar(QWidget):
 
     def set_shown(self, on: bool) -> None:
         """Oculta/mostra sem desmapear a janela (preserva a exclusão da captura no compositor)."""
-        from ..platform.hyprland import is_hyprland, settle
+        from ..platform.hyprland import is_hyprland, open_on_screen, settle
 
         self.shown = on
         if is_hyprland():
@@ -290,6 +303,7 @@ class RecBar(QWidget):
                 self.clearMask()
                 if not self.isVisible():
                     target = self.geometry()
+                    open_on_screen(self, target)
                     self.show()
                     # o Hyprland leva janelas novas para o monitor em foco: confirma a posição escolhida
                     settle(self, target, stop_when_placed=True)
@@ -333,6 +347,16 @@ class RecBar(QWidget):
         b = self.tool_buttons.get(tool)
         if b:
             b.setChecked(True)
+
+    def set_zoom(self, level: float) -> None:
+        """Mostra "ZOOM 2×" enquanto o zoom acompanhando o mouse está ligado (some quando desliga)."""
+        on = level > 1.001
+        text = f"ZOOM {level:.1f}×".replace(".0×", "×")
+        for tag in (self.pill_zoom, self.zoom_tag):
+            tag.setText(text)
+            tag.setVisible(on)
+        self.adjustSize()
+        self.geometry_changed.emit()
 
     def set_time(self, seconds: float) -> None:
         s = int(seconds)

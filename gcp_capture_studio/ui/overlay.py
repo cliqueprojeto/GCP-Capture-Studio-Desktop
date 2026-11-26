@@ -16,7 +16,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QLineEdit, QWidget
 
-from ..platform.hyprland import is_hyprland, settle
+from ..platform.hyprland import is_hyprland, open_on_screen, settle
 
 LENS_TITLE = "GCP Capture Studio · lupa"  # mesmo prefixo da barra: fica fora do vídeo
 FRAME_TITLE = "GCP Capture Studio · enquadramento do zoom"
@@ -219,15 +219,19 @@ class _ZoomFrame(QWidget):
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setWindowTitle(FRAME_TITLE)
         self.view = QRectF()
+        # Hyprland (a moldura entra na captura): desenhada por fora da área enquadrada, que é o que vai
+        # para o vídeo com zoom; assim serve de referência na tela sem aparecer na gravação
+        self.outside = 0.0
 
     def set_view(self, view: QRectF) -> None:
         if view == self.view:
             return
         old, self.view = self.view, view
         region = QRegion()
+        m = 8 + self.outside
         for r in (old, view):
             if not r.isNull():
-                outer = r.adjusted(-8, -8, 8, 8).toAlignedRect()
+                outer = r.adjusted(-m, -m, m, m).toAlignedRect()
                 region += QRegion(outer) - QRegion(r.adjusted(26, 26, -26, -26).toAlignedRect())
         self.update(region)
 
@@ -236,7 +240,8 @@ class _ZoomFrame(QWidget):
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        r = self.view.adjusted(1, 1, -1, -1)
+        o = self.outside
+        r = self.view.adjusted(-o, -o, o, o) if o else self.view.adjusted(1, 1, -1, -1)
         p.setBrush(Qt.NoBrush)
         p.setPen(QPen(QColor(0, 0, 0, 110), 4))
         p.drawRoundedRect(r, 6, 6)
@@ -271,7 +276,13 @@ class _ZoomPreview(QWidget):
             return
         self.shown = on
         if is_hyprland():
-            self.setVisible(on)
+            if on and not self.isVisible():
+                target = self.geometry()
+                open_on_screen(self, target)
+                self.show()
+                settle(self, target, stop_when_placed=True)
+            elif not on:
+                self.hide()
         elif on:
             self.clearMask()
         else:
@@ -281,6 +292,7 @@ class _ZoomPreview(QWidget):
     def mousePressEvent(self, ev) -> None:
         if ev.button() == Qt.LeftButton:
             self._drag = ev.globalPosition().toPoint() - self.pos()
+            self._settle_token = None  # arrastada pelo usuário: nada a confirmar
 
     def mouseMoveEvent(self, ev) -> None:
         if self._drag is not None and ev.buttons() & Qt.LeftButton:
@@ -353,6 +365,7 @@ class _TextEntry(QLineEdit):
         )
         self.resize(max(360, size * 14), size + 22)
         self.move(global_pos - QPoint(6, self.height() - 10))
+        open_on_screen(self)
         self.show()
         self.raise_()
         self.activateWindow()
@@ -415,6 +428,9 @@ class AnnotationOverlay(QObject):
         self.zoomframe = _ZoomFrame(self)
         self.zoomview = _ZoomPreview(self)
         self.lens_excluded = False  # o compositor mantém a janela da lupa fora do vídeo
+        self.hypr = is_hyprland()
+        self.preview_screen = QRect()  # Hyprland: outro monitor (não gravado) para a miniatura do zoom
+        self._frame_rect = QRect()
         self.keycap: list | None = None  # [texto, instante ao pressionar, instante ao soltar]
         self._last_fx = QRect()
         self.active = False
@@ -442,6 +458,7 @@ class AnnotationOverlay(QObject):
         self.redo_stack.clear()
         self.ripples.clear()
         self.active = True
+        open_on_screen(self.canvas, screen_geometry)
         self.canvas.show()
         self.canvas.raise_()
         settle(self.canvas, screen_geometry)
@@ -488,12 +505,20 @@ class AnnotationOverlay(QObject):
     def place_private_windows(self, screen: QRect, capture: QRect) -> None:
         """Posiciona a moldura sobre a tela gravada e a miniatura no canto (ou onde o usuário a deixou)."""
         self.zoomframe.setGeometry(screen)
+        self._frame_rect = QRect(screen)
         settle(self.zoomframe, screen)
         w = int(self.settings.get("effects.zoom_preview_size", 320))
         h = max(90, round(w * capture.height() / max(1, capture.width())))
         self.zoomview.resize(w + 4, h + 4)
         pos = self.settings.get("effects.zoom_preview_pos")
-        if pos and screen.contains(QPoint(pos[0] + w // 2, pos[1] + h // 2)):
+        ps = self.preview_screen
+        if self.hypr and not ps.isNull():
+            # Hyprland: a miniatura fica no monitor não gravado (abaixo da barra), fora do vídeo
+            if pos and ps.contains(QPoint(pos[0] + w // 2, pos[1] + h // 2)):
+                self.zoomview.move(pos[0], pos[1])
+            else:
+                self.zoomview.move(ps.x() + (ps.width() - w) // 2, ps.y() + 150)
+        elif pos and screen.contains(QPoint(pos[0] + w // 2, pos[1] + h // 2)):
             self.zoomview.move(pos[0], pos[1])
         else:
             self.zoomview.move(screen.right() - w - 28, screen.bottom() - h - 90)
@@ -531,6 +556,7 @@ class AnnotationOverlay(QObject):
             else:
                 if not self._screen_rect.isNull():
                     self.catcher.setGeometry(self._screen_rect)
+                open_on_screen(self.catcher, self._screen_rect)
                 self.catcher.show()
                 settle(self.catcher, self._screen_rect)
                 self.catcher.raise_()
@@ -684,7 +710,8 @@ class AnnotationOverlay(QObject):
         self.recorder.set_preview(self.active and (self.tool == "blur" or self._lens_local() or self._zoom_preview_on()))
 
     def _zoom_preview_on(self) -> bool:
-        return bool(self.fx("zoom")) and bool(self.fx("zoom_preview")) and self.lens_excluded and self.recorder.lens_in_video
+        outside = self.lens_excluded or (self.hypr and not self.preview_screen.isNull())
+        return bool(self.fx("zoom")) and bool(self.fx("zoom_preview")) and outside and self.recorder.lens_in_video
 
     def _zoom_visible(self) -> bool:
         """O zoom está ligado ou ainda terminando a animação de saída."""
@@ -692,18 +719,29 @@ class AnnotationOverlay(QObject):
 
     def _sync_zoom_windows(self) -> None:
         """Moldura (área enquadrada) e miniatura ao vivo do zoom — só quando ficam fora do vídeo."""
-        usable = self.active and self.lens_excluded and self.recorder.lens_in_video
+        # no Hyprland a moldura não sai do vídeo: é desenhada por fora do enquadramento (ver _ZoomFrame)
+        usable = self.active and (self.lens_excluded or self.hypr) and self.recorder.lens_in_video
         z, vx, vy = self.recorder.view_transform()
         zooming = usable and z > 1.002
         fr = self.zoomframe
         if zooming and self.fx("zoom_frame"):
             s = self.frame_scale
             fw, fh = self.recorder.source.out_size()
-            fr.clearMask()
+            fr.outside = 0.0 if self.lens_excluded else 14.0
+            if self.hypr and not self.lens_excluded:
+                if not fr.isVisible():
+                    open_on_screen(fr, self._frame_rect)
+                    fr.show()
+                    settle(fr, self._frame_rect)
+            else:
+                fr.clearMask()
             fr.set_view(QRectF(self.capture.x() + vx / s, self.capture.y() + vy / s, fw / z / s, fh / z / s))
-        elif not fr.view.isNull():
+        elif not fr.view.isNull() or (self.hypr and fr.isVisible()):
             fr.set_view(QRectF())
-            fr.setMask(QRegion(0, 0, 1, 1))
+            if self.hypr and not self.lens_excluded:
+                fr.hide()
+            else:
+                fr.setMask(QRegion(0, 0, 1, 1))
         pv = self.zoomview
         show = usable and self._zoom_preview_on()
         pv.set_shown(show)
