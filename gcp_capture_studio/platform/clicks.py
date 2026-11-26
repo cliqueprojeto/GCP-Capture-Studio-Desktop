@@ -89,6 +89,8 @@ class ClickWatcher(QObject):
     def start(self) -> bool:
         self.stop()
         self._held.clear()
+        if os.environ.get("GCP_CAPTURE_NO_EVDEV"):
+            return False  # teste: simula um usuário fora do grupo "input"
         for path in sorted(glob.glob("/dev/input/event*")):
             pointer = self.want_clicks and _is_pointer(path)
             keyboard = self.want_keys and _has_key(path, 30) and _has_key(path, 28)

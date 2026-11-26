@@ -31,6 +31,14 @@ _OVERLAY_FLAGS = (
 )
 
 
+def _clear(p: QPainter, rect) -> None:
+    """Preenche com transparência total (sem depender da limpeza automática do Qt)."""
+    mode = p.compositionMode()
+    p.setCompositionMode(QPainter.CompositionMode_Source)
+    p.fillRect(rect, Qt.transparent)
+    p.setCompositionMode(mode)
+
+
 @dataclass
 class Item:
     kind: str
@@ -198,8 +206,9 @@ class _LensWindow(QWidget):
         self.setWindowTitle(LENS_TITLE)
         self.resize(240, 240)
 
-    def paintEvent(self, _ev) -> None:
+    def paintEvent(self, ev) -> None:
         p = QPainter(self)
+        _clear(p, ev.rect())
         self.owner.paint_lens(p, QPointF(self.width() / 2, self.height() / 2))
         p.end()
 
@@ -235,10 +244,13 @@ class _ZoomFrame(QWidget):
                 region += QRegion(outer) - QRegion(r.adjusted(26, 26, -26, -26).toAlignedRect())
         self.update(region)
 
-    def paintEvent(self, _ev) -> None:
-        if self.view.isNull():
-            return
+    def paintEvent(self, ev) -> None:
         p = QPainter(self)
+        # limpa explicitamente: no Hyprland, uma área da janela que o programa nunca pinta aparece preta
+        _clear(p, ev.rect())
+        if self.view.isNull():
+            p.end()
+            return
         p.setRenderHint(QPainter.Antialiasing)
         o = self.outside
         r = self.view.adjusted(-o, -o, o, o) if o else self.view.adjusted(1, 1, -1, -1)
@@ -307,8 +319,9 @@ class _ZoomPreview(QWidget):
         super().moveEvent(ev)
         self.geometry_changed.emit()
 
-    def paintEvent(self, _ev) -> None:
+    def paintEvent(self, ev) -> None:
         p = QPainter(self)
+        _clear(p, ev.rect())
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         r = QRectF(self.rect()).adjusted(2, 2, -2, -2)

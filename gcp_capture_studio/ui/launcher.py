@@ -383,8 +383,12 @@ class Launcher(QWidget):
 
     def mousePressEvent(self, ev) -> None:
         if ev.button() == Qt.LeftButton and ev.position().y() < 90:
+            from ..platform.hyprland import is_hyprland
+
             handle = self.windowHandle()
-            if handle is not None and handle.startSystemMove():
+            # o Hyprland anuncia, mas não atende, o arrasto pelo compositor (_NET_WM_MOVERESIZE): lá o
+            # programa move a janela por conta própria
+            if not is_hyprland() and handle is not None and handle.startSystemMove():
                 return
             self._drag = ev.globalPosition().toPoint() - self.frameGeometry().topLeft()
 

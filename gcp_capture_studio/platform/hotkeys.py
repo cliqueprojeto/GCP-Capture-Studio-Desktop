@@ -108,6 +108,14 @@ class GlobalHotkeys(QObject):
         hyprland.events().reloaded.connect(self._hypr.reapply)
         return True
 
+    def bound_combos(self) -> set:
+        """Combinações (modmask, tecla) registradas como atalhos do programa no Hyprland."""
+        if self._hypr is None:
+            return set()
+        from .hyprland import _modmask
+
+        return {(_modmask(mods), key.lower()) for mods, key in self._hypr.active.values()}
+
     def set_server(self, name: str) -> None:
         """Endereço do programa em execução: o Hyprland o avisa a cada atalho (ver hyprsend.py)."""
         self._server = name

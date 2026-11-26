@@ -47,6 +47,32 @@ _QT_KEYS = {
 }
 MOUSE_BUTTONS = {"left": "mouse:272", "right": "mouse:273", "middle": "mouse:274"}
 
+# mostrador de teclas sem acesso a /dev/input: combinações com Ctrl, Alt ou Super (digitação comum,
+# inclusive senhas, nunca é capturada) registradas no Hyprland sem consumir a tecla
+_COMBO_MODS = [["CTRL"], ["ALT"], ["SUPER"], ["CTRL", "SHIFT"], ["CTRL", "ALT"], ["SUPER", "SHIFT"], ["ALT", "SHIFT"], ["CTRL", "SUPER"]]
+_COMBO_KEYS = (
+    [chr(c) for c in range(ord("A"), ord("Z") + 1)] + [str(d) for d in range(10)] + [f"F{i}" for i in range(1, 13)]
+    + ["Tab", "Return", "Escape", "space", "BackSpace", "Delete", "Left", "Right", "Up", "Down", "Home", "End",
+       "Prior", "Next", "minus", "equal", "comma", "period", "slash", "semicolon", "apostrophe", "bracketleft",
+       "bracketright", "backslash", "grave", "Print"]
+)
+_MOD_LABEL = {"CTRL": "Ctrl", "SUPER": "Super", "ALT": "Alt", "SHIFT": "Shift"}
+_KEY_LABEL = {
+    "Return": "Enter", "Escape": "Esc", "space": "Espaço", "BackSpace": "Backspace", "Left": "←", "Right": "→",
+    "Up": "↑", "Down": "↓", "Prior": "PgUp", "Next": "PgDn", "minus": "-", "equal": "=", "comma": ",",
+    "period": ".", "slash": "/", "semicolon": ";", "apostrophe": "'", "bracketleft": "[", "bracketright": "]",
+    "backslash": "\\", "grave": "`", "Print": "PrtSc",
+}
+
+
+def combo_label(message: str) -> str:
+    """"CTRL+SHIFT|S" → "Ctrl + Shift + S" (mesma ordem do mostrador por /dev/input)."""
+    mods, _, key = message.partition("|")
+    names = [_MOD_LABEL.get(m, m) for m in mods.split("+") if m]
+    order = ["Ctrl", "Super", "Alt", "Shift"]
+    names.sort(key=lambda n: order.index(n) if n in order else 9)
+    return " + ".join(names + [_KEY_LABEL.get(key, key)])
+
 
 # -- socket de controle -----------------------------------------------------------------------
 def _socket_dir() -> str | None:
@@ -604,6 +630,16 @@ def sender_command(server: str, message: str) -> str:
     return " ".join(shlex.quote(a) for a in (py, "-I", "-S", script, server, message))
 
 
+def _bind_namespace(desc: str) -> str | None:
+    """Grupo de um atalho do programa pela descrição: "GCP Capture Studio [mouse] click_left"
+    (versões anteriores: "GCP Capture Studio: click_left")."""
+    rest = desc[len(BIND_TAG):]
+    if rest.startswith(" [") and "]" in rest:
+        return rest[2:rest.index("]")]
+    ident = rest.lstrip(": ").strip()
+    return "mouse" if ident.startswith("click_") else "combo" if ident.startswith("combo_") else "keys"
+
+
 class Binds:
     """Atalhos registrados no Hyprland pelo programa. Nunca remove nem substitui atalhos do usuário:
     uma combinação já usada no sistema fica de fora (e é informada em `conflicts`)."""
@@ -618,7 +654,7 @@ class Binds:
 
     def _foreign(self) -> set[tuple[int, str]]:
         taken = set()
-        for b in query("binds") or []:
+        for b in query("binds", 4.0) or []:
             if not isinstance(b, dict):
                 continue
             desc = str(b.get("description", ""))
@@ -643,7 +679,9 @@ class Binds:
         lua_parts = [f"{self.table} = {self.table} or {{}}"]
         unbind = []
         for ident, (seq, cmd, passthrough) in wanted.items():
-            if seq.startswith("mouse:"):
+            if isinstance(seq, tuple):
+                mods, key = list(seq[0]), seq[1]
+            elif seq.startswith("mouse:"):
                 mods, key = [], seq
             else:
                 parsed = to_hypr_keys(seq)
@@ -653,7 +691,7 @@ class Binds:
             if (_modmask(mods), key.lower()) in taken:
                 self.conflicts.add(ident)
                 continue
-            desc = f"{BIND_TAG}: {ident}"
+            desc = f"{BIND_TAG} [{self.ns}] {ident}"
             if self.cfg.lua:
                 keys = " + ".join(mods + [key])
                 opts = f"description = {lua_str(desc)}" + (", non_consuming = true" if passthrough else "")
@@ -685,12 +723,17 @@ class Binds:
         else:
             combos = {f"{' '.join(mods)}, {key}" for mods, key in self.active.values()}
             # atalhos deixados por uma execução anterior que fechou de forma inesperada
-            for bd in query("binds") or []:
+            for bd in query("binds", 4.0) or []:
                 if not isinstance(bd, dict):
                     continue
                 desc, arg = str(bd.get("description", "")), str(bd.get("arg", ""))
-                ours = desc.startswith(f"{BIND_TAG}: ") and (self.ns != "mouse") == (not desc.startswith(f"{BIND_TAG}: click_"))
-                if ours or (not desc and "hyprsend.py" in arg and (("click:" in arg) == (self.ns == "mouse"))):
+                if desc.startswith(BIND_TAG):
+                    ns = _bind_namespace(desc)
+                elif "hyprsend.py" in arg:  # sem descrição (bind sem "d"): pelo tipo da mensagem
+                    ns = "mouse" if "click:" in arg else "combo" if "keys:" in arg else "keys"
+                else:
+                    ns = None
+                if ns == self.ns:
                     mask = int(bd.get("modmask", 0))
                     mods = [m for m, bit in _MODMASK.items() if mask & bit]
                     combos.add(f"{' '.join(mods)}, {bd.get('key', '')}")
@@ -821,6 +864,7 @@ class HyprlandBridge(QObject):
         self._thread: threading.Thread | None = None
         self._running = False
         self._mouse = Binds("mouse") if self.available else None
+        self._combo = Binds("combo") if self.available else None
         self._server = ""
         if self.available:
             install_rules()
@@ -829,8 +873,9 @@ class HyprlandBridge(QObject):
     def _reloaded(self) -> None:
         _ASSIGNED.clear()
         install_rules()
-        if self._mouse is not None:
-            self._mouse.reapply()
+        for b in (self._mouse, self._combo):
+            if b is not None:
+                b.reapply()
 
     def set_server(self, name: str) -> None:
         """Endereço do programa em execução (QLocalServer) para os comandos dos atalhos."""
@@ -957,8 +1002,31 @@ class HyprlandBridge(QObject):
         if self.available:
             raise_windows(prefixes, focus_prefix)
 
+    def watch_keys(self, on: bool, skip: set | None = None) -> bool:
+        """Sem acesso a /dev/input: o Hyprland avisa as combinações com Ctrl/Alt/Super (sem consumi-las).
+        `skip`: combinações (modmask, tecla) que já são atalhos do próprio programa."""
+        if self._combo is None or not self._server:
+            return False
+        if not on:
+            self._combo._wanted = {}
+            self._combo.clear()
+            return True
+        skip = skip or set()
+        wanted = {}
+        for mods in _COMBO_MODS:
+            for key in _COMBO_KEYS:
+                if (_modmask(mods), key.lower()) in skip:
+                    continue
+                msg = "keys:" + "+".join(mods) + "|" + key
+                wanted[f"combo_{'_'.join(mods)}_{key}"] = ((mods, key), sender_command(self._server, msg), True)
+        self._combo.set(wanted)
+        return bool(self._combo.active)
+
     def shutdown(self) -> None:
         self.stop_pointer()
+        if self._combo is not None:
+            self._combo._wanted = {}
+            self._combo.clear()
         if self._mouse is not None:
             self._mouse._wanted = {}
             self._mouse.clear()

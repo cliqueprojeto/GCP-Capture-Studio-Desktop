@@ -94,6 +94,7 @@ class Controller(QObject):
         self.kwin = _make_bridge(self)
         self.hyprland = getattr(self.kwin, "kind", "") == "hyprland"
         self._hypr_clicks = False
+        self._hypr_keys = False
         self.clicks = ClickWatcher(self)
         self.hotkeys = GlobalHotkeys(self)
         if server_name:
@@ -530,6 +531,9 @@ class Controller(QObject):
         if self._hypr_clicks:
             self.kwin.watch_clicks(False)
             self._hypr_clicks = False
+        if self._hypr_keys:
+            self.kwin.watch_keys(False)
+            self._hypr_keys = False
         if self._kwin_click:
             self.kwin.set_effect("mouseclick", False)
             self._kwin_click = False
@@ -695,6 +699,13 @@ class Controller(QObject):
         elif not clicks and self._kwin_click:
             self.kwin.set_effect("mouseclick", False)
             self._kwin_click = False
+        if self.hyprland:
+            # sem acesso a /dev/input: as combinações com Ctrl/Alt/Super vêm do Hyprland
+            want_keys = keys and not ok
+            if want_keys != self._hypr_keys:
+                self._hypr_keys = self.kwin.watch_keys(want_keys, self.hotkeys.bound_combos()) and want_keys
+            if want_keys and self._hypr_keys:
+                return
         if keys and not ok:
             self.settings.set("effects.keys", False)
             self.tray.showMessage(
@@ -1120,6 +1131,11 @@ def main(argv: list[str] | None = None) -> int:
             elif msg.startswith("click:"):
                 if ctl.state in ("recording", "paused") and ctl._hypr_clicks:
                     ctl.overlay.click(msg[6:])
+            elif msg.startswith("keys:"):
+                if ctl.state in ("recording", "paused") and ctl._hypr_keys:
+                    from .platform.hyprland import combo_label
+
+                    ctl.overlay.show_keys(combo_label(msg[5:]), held=False)
             elif msg:
                 ctl.show_launcher()
 

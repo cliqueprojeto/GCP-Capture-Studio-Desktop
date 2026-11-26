@@ -49,7 +49,7 @@ def _hypr(cmd: str) -> None:
 
 def _cleanup() -> None:
     runtime = os.environ.get("XDG_RUNTIME_DIR") or os.path.expanduser("~/.cache")
-    for ns in ("keys", "mouse"):
+    for ns in ("keys", "mouse", "combo"):
         state = os.path.join(runtime, f"gcp-capture-studio-hyprland-{ns}.json")
         try:
             with open(state, encoding="utf-8") as fh:
